@@ -266,10 +266,14 @@ try {
   await page.waitForFunction(() => document.body.innerText.includes("课程内容：网络安全意识专题培训"), undefined, { timeout: 10000 });
   await page.waitForFunction(() => document.body.innerText.includes("课程内容：电子邮件安全"), undefined, { timeout: 20000 });
 
+  // Auto-learning is now on a course player page (/home/course/...), which is not the
+  // directory, so the panel must have auto-minimized. Read progress from the debug API,
+  // which does not depend on the panel being visible.
+  await page.waitForSelector(".kme-learning-navigator-panel", { state: "hidden", timeout: 5000 });
   const finalState = await page.evaluate(() => ({
-    panel: document.querySelector("#kme-learning-navigator")?.innerText || "",
     log: window.__mockLog,
-    text: document.body.innerText
+    text: document.body.innerText,
+    progress: window.__kmeLearningNavigator?.inspect?.()?.progress || null
   }));
 
   if (!finalState.log.includes("course:网络安全意识专题培训")) {
@@ -284,8 +288,8 @@ try {
   if (!finalState.text.includes("课程内容：电子邮件安全")) {
     throw new Error(`next catalog course failed: ${finalState.text}`);
   }
-  if (!finalState.panel.includes("总进度 2/3")) {
-    throw new Error(`final progress failed: ${JSON.stringify(finalState.panel)}`);
+  if (!finalState.progress || finalState.progress.completed !== 2 || finalState.progress.total !== 3) {
+    throw new Error(`final progress failed: ${JSON.stringify(finalState.progress)}`);
   }
 
   const timePage = await context.newPage();
@@ -293,6 +297,14 @@ try {
   await timePage.addStyleTag({ path: path.join(sourceExtensionPath, "styles.css") });
   await timePage.addScriptTag({ path: path.join(sourceExtensionPath, "content.js") });
   await timePage.waitForSelector("#kme-learning-navigator", { timeout: 10000 });
+  // A course player page is not the directory, so the panel starts minimized; restore it
+  // before driving the controls.
+  await timePage.waitForSelector(".kme-learning-navigator-panel", { state: "hidden", timeout: 5000 });
+  await timePage.evaluate(() => {
+    document.querySelector(".kme-learning-navigator-logo-toggle")
+      ?.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+  });
+  await timePage.waitForSelector(".kme-learning-navigator-panel", { state: "visible", timeout: 5000 });
   await timePage.locator(".kme-learning-navigator-primary").click();
   await timePage.waitForFunction(() => window.__mockReplayCount > 0, undefined, { timeout: 10000 });
   const timeState = await timePage.evaluate(() => ({

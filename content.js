@@ -45,6 +45,7 @@
     busy: false,
     actionLockUntil: 0,
     lastUrl: location.href,
+    panelUrl: location.href,
     lastVideoState: "",
     scanTimer: 0,
     speedTimer: 0,
@@ -889,6 +890,7 @@
     try {
       if (state.lastUrl !== location.href) {
         state.lastUrl = location.href;
+        syncPanelForUrl();
         setActionLock(1200);
         await runtimePatch({ lastTargetKey: "", lastTargetAt: 0 });
         setStatus("页面已切换，重新识别学习状态");
@@ -1033,6 +1035,28 @@
     }
     const dot = document.querySelector(`.${EXT_ID}-logo-dot`);
     if (dot) dot.classList.toggle("is-running", state.settings.running);
+  }
+
+  // The floating panel should only auto-expand on the training "study" page — the real
+  // course directory, e.g. /<tenant>/home/training/study. On every other KME page (the home
+  // landing, a course player, a quiz, etc.) it stays minimized to the logo so it never covers
+  // the player. Actual course content lives under /home/course/..., which is excluded here.
+  function isStudyCatalogPage() {
+    return /\/home\/training\/study(?:\/|$)/.test(location.pathname);
+  }
+
+  // Re-apply that per-page default whenever the URL changes. The site is a single-page app,
+  // so navigating from the directory into a course (or back) does not reload the content
+  // script; without this the panel would keep whatever state it had. We only act on an actual
+  // URL change, so a manual minimize/restore on the current page is preserved.
+  function syncPanelForUrl() {
+    if (state.panelUrl === location.href) return;
+    state.panelUrl = location.href;
+    const shouldOpen = isStudyCatalogPage();
+    if (shouldOpen === state.panelOpen) return;
+    state.panelOpen = shouldOpen;
+    if (state.rootEl) state.rootEl.classList.toggle("open", shouldOpen);
+    if (shouldOpen) updatePanelSummary();
   }
 
   function renderPanel() {
@@ -1202,7 +1226,10 @@
     const stored = await storage.get();
     state.settings = { ...DEFAULTS, ...stored };
     state.runtime = { ...DEFAULT_RUNTIME, ...(stored.runtime || {}) };
-    state.panelOpen = typeof stored.panelOpen === "boolean" ? stored.panelOpen : true;
+    // Panel visibility follows the page, not stored state: only the course directory page
+    // opens the panel; every other KME page starts minimized to the logo.
+    state.panelUrl = location.href;
+    state.panelOpen = isStudyCatalogPage();
     state.status = state.settings.running ? "已恢复自动学习" : "未启动";
 
     renderPanel();
@@ -1220,6 +1247,7 @@
 
     state.scanTimer = window.setInterval(() => tick("timer"), 2000);
     state.speedTimer = window.setInterval(() => {
+      syncPanelForUrl();
       restoreSpeedMenu();
       const liveVideos = videos();
       liveVideos.forEach(bindVideo);
