@@ -1,0 +1,359 @@
+#kme-learning-navigator {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2147483647;
+  color: var(--kme-ink);
+  font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --kme-accent: #246bfe;
+  --kme-accent-2: #21bfae;
+  --kme-danger: #e5484d;
+  --kme-ink: #1b2150;
+  --kme-muted: rgba(27, 31, 70, 0.56);
+  --kme-line: rgba(27, 31, 70, 0.1);
+  --kme-surface: rgba(255, 255, 255, 0.97);
+}
+
+#kme-learning-navigator * {
+  box-sizing: border-box;
+}
+
+.kme-learning-navigator-panel {
+  display: none;
+  width: 296px;
+  padding: 14px;
+  border: 1px solid var(--kme-line);
+  border-radius: 14px;
+  background: var(--kme-surface);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  backdrop-filter: blur(12px) saturate(1.4);
+  box-shadow: 0 18px 48px rgba(20, 27, 70, 0.22), 0 2px 6px rgba(20, 27, 70, 0.08);
+}
+
+#kme-learning-navigator.open .kme-learning-navigator-panel {
+  display: block;
+  animation: kme-pop-in 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes kme-pop-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+
+.kme-learning-navigator-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.kme-learning-navigator-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.kme-learning-navigator-title::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--kme-accent), var(--kme-accent-2));
+}
+
+.kme-learning-navigator-minimize {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--kme-line);
+  border-radius: 8px;
+  background: rgba(27, 31, 70, 0.04);
+  color: var(--kme-muted);
+  cursor: pointer;
+  font: 600 16px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.kme-learning-navigator-minimize:hover {
+  background: rgba(36, 107, 254, 0.1);
+  color: var(--kme-accent);
+}
+
+.kme-learning-navigator-minimize:active {
+  transform: scale(0.92);
+}
+
+.kme-learning-navigator-actions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.kme-learning-navigator-primary,
+.kme-learning-navigator-secondary {
+  height: 38px;
+  border-radius: 10px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  transition: transform 0.12s ease, box-shadow 0.18s ease, background 0.18s ease,
+    border-color 0.18s ease, filter 0.18s ease;
+}
+
+.kme-learning-navigator-primary {
+  border: none;
+  color: #fff;
+  background: linear-gradient(135deg, var(--kme-accent), #3d82ff);
+  box-shadow: 0 6px 16px rgba(36, 107, 254, 0.34);
+}
+
+.kme-learning-navigator-primary:hover {
+  filter: brightness(1.05);
+  box-shadow: 0 8px 20px rgba(36, 107, 254, 0.42);
+}
+
+.kme-learning-navigator-primary:active {
+  transform: translateY(1px);
+}
+
+.kme-learning-navigator-primary.is-running {
+  background: linear-gradient(135deg, var(--kme-danger), #f0676b);
+  box-shadow: 0 6px 16px rgba(229, 72, 77, 0.34);
+}
+
+.kme-learning-navigator-secondary {
+  min-width: 80px;
+  padding: 0 14px;
+  border: 1px solid var(--kme-line);
+  background: #fff;
+  color: var(--kme-ink);
+}
+
+.kme-learning-navigator-secondary:hover {
+  border-color: rgba(36, 107, 254, 0.4);
+  color: var(--kme-accent);
+  background: rgba(36, 107, 254, 0.05);
+}
+
+.kme-learning-navigator-secondary:active {
+  transform: translateY(1px);
+}
+
+.kme-learning-navigator-progress {
+  margin-bottom: 12px;
+  padding: 11px 12px;
+  border: 1px solid rgba(36, 107, 254, 0.14);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(36, 107, 254, 0.08), rgba(33, 191, 174, 0.1));
+}
+
+.kme-learning-navigator-progress-label {
+  margin-bottom: 8px;
+  color: var(--kme-ink);
+  font-weight: 600;
+  font-size: 12.5px;
+}
+
+.kme-learning-navigator-progress-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(27, 31, 70, 0.12);
+}
+
+.kme-learning-navigator-progress-fill {
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--kme-accent), var(--kme-accent-2));
+  transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.kme-learning-navigator-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 32px;
+  gap: 12px;
+}
+
+/* Render the native checkboxes as compact toggle switches without touching the markup. */
+.kme-learning-navigator-row input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex: none;
+  width: 38px;
+  height: 22px;
+  margin: 0;
+  border-radius: 999px;
+  background: #c9cee0;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.kme-learning-navigator-row input[type="checkbox"]::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s ease;
+}
+
+.kme-learning-navigator-row input[type="checkbox"]:checked {
+  background: linear-gradient(135deg, var(--kme-accent), var(--kme-accent-2));
+}
+
+.kme-learning-navigator-row input[type="checkbox"]:checked::after {
+  transform: translateX(16px);
+}
+
+.kme-learning-navigator-row input[type="checkbox"]:focus-visible {
+  outline: 2px solid rgba(36, 107, 254, 0.5);
+  outline-offset: 2px;
+}
+
+.kme-learning-navigator-summary {
+  min-height: 18px;
+  margin-top: 12px;
+  padding-top: 11px;
+  border-top: 1px solid var(--kme-line);
+  color: var(--kme-muted);
+  font-size: 12px;
+  word-break: break-word;
+}
+
+.kme-learning-navigator-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 9px;
+  color: var(--kme-ink);
+  opacity: 0.85;
+  font-size: 12px;
+  word-break: break-word;
+}
+
+.kme-learning-navigator-status::before {
+  content: "";
+  flex: none;
+  margin-top: 4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--kme-accent), var(--kme-accent-2));
+}
+
+.kme-learning-navigator-logo-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  margin-left: auto;
+  padding: 0;
+  border: 1px solid var(--kme-line);
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ffffff, #eaf3ff);
+  cursor: pointer;
+  box-shadow: 0 12px 28px rgba(20, 27, 70, 0.22);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.kme-learning-navigator-logo-toggle:hover {
+  transform: translateY(-2px) scale(1.04);
+  box-shadow: 0 16px 34px rgba(20, 27, 70, 0.26);
+}
+
+.kme-learning-navigator-logo-toggle:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.kme-learning-navigator-logo-toggle img {
+  width: 32px;
+  height: 32px;
+  display: block;
+  pointer-events: none;
+}
+
+#kme-learning-navigator.open .kme-learning-navigator-logo-toggle {
+  display: none;
+}
+
+.kme-learning-navigator-logo-dot {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #9aa0b8;
+}
+
+.kme-learning-navigator-logo-dot.is-running {
+  background: var(--kme-accent-2);
+  animation: kme-pulse 1.8s ease-out infinite;
+}
+
+@keyframes kme-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(33, 191, 174, 0.55); }
+  70% { box-shadow: 0 0 0 7px rgba(33, 191, 174, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(33, 191, 174, 0); }
+}
+
+@media (prefers-color-scheme: dark) {
+  #kme-learning-navigator {
+    --kme-ink: #e7ebff;
+    --kme-muted: rgba(231, 235, 255, 0.6);
+    --kme-line: rgba(231, 235, 255, 0.14);
+    --kme-surface: rgba(28, 32, 54, 0.95);
+  }
+
+  .kme-learning-navigator-secondary {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--kme-ink);
+  }
+
+  .kme-learning-navigator-secondary:hover {
+    background: rgba(36, 107, 254, 0.18);
+  }
+
+  .kme-learning-navigator-minimize {
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .kme-learning-navigator-row input[type="checkbox"] {
+    background: rgba(255, 255, 255, 0.18);
+  }
+
+  .kme-learning-navigator-progress-track {
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .kme-learning-navigator-logo-toggle {
+    background: linear-gradient(135deg, #2a3050, #1d2238);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #kme-learning-navigator *,
+  #kme-learning-navigator.open .kme-learning-navigator-panel {
+    animation: none !important;
+    transition: none !important;
+  }
+}
