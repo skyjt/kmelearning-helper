@@ -1,0 +1,24 @@
+{
+  "name": "kmelearning-helper",
+  "version": "2.3.0",
+  "description": "Chrome MV3 helper for pc.kmelearning.com learning pages.",
+  "type": "module",
+  "scripts": {
+    "test": "node tests/extension-smoke.mjs",
+    "test:smoke": "node tests/extension-smoke.mjs",
+    "icons": "node tools/generate-icons.mjs"
+  },
+  "keywords": [
+    "chrome-extension",
+    "manifest-v3",
+    "kmelearning"
+  ],
+  "author": "skyjt",
+  "license": "MIT",
+  "devDependencies": {
+    "playwright": "^1.60.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
