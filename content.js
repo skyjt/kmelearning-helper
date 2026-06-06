@@ -375,19 +375,27 @@
   }
 
   function dedupeElements(elements) {
+    // Key on text *and* on-screen position. Two distinct sibling rows can legitimately share
+    // the same title — e.g. a catalog with two different "征信合规管理" courses — and keying on
+    // text alone collapsed them into one, undercounting the list (5 shown for 6 courses). The
+    // containment pass below still removes nested/overlapping matches of the *same* row, which
+    // is the duplication text-only dedup was actually meant to handle.
+    const keyOf = (el) => {
+      const rect = el.getBoundingClientRect();
+      return `${compact(textOf(el))}@${Math.round(rect.top)}:${Math.round(rect.left)}`;
+    };
     const seen = new Set();
     const result = [];
     for (const el of elements) {
       if (result.some((item) => item === el || item.contains(el))) continue;
       for (let index = result.length - 1; index >= 0; index -= 1) {
         if (el.contains(result[index])) {
-          seen.delete(compact(textOf(result[index])));
+          seen.delete(keyOf(result[index]));
           result.splice(index, 1);
         }
       }
-      const text = compact(textOf(el));
-      if (!text || seen.has(text)) continue;
-      seen.add(text);
+      if (!compact(textOf(el)) || seen.has(keyOf(el))) continue;
+      seen.add(keyOf(el));
       result.push(el);
     }
     return result;

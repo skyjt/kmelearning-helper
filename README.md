@@ -130,7 +130,7 @@ git clone https://github.com/skyjt/kmelearning-helper.git
 
 ## 更新日志
 
-完整记录见 [CHANGELOG.md](CHANGELOG.md)。最近一次更新（**v2.4.0**）：浮窗默认最小化为右下角图标，仅在课程目录页（`…/home/training/study`）自动展开，不再遮挡课程播放页。
+完整记录见 [CHANGELOG.md](CHANGELOG.md)。最近一次更新（**v2.4.1**）：修复目录中同名课程被合并、进度少算的问题（如两门「征信合规管理」）；浮窗默认最小化、仅课程目录页自动展开。
 
 ---
 
