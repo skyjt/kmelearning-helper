@@ -23,7 +23,6 @@
   const DEFAULTS = {
     running: false,
     autoPlay: true,
-    forceNormalSpeed: true,
     recoverOnUnconfirmedEnd: true,
     enforceCourseTotalTime: true,
     skipQuestions: true,
@@ -51,6 +50,8 @@
     speedTimer: 0,
     mutationTimer: 0,
     panelTimer: 0,
+    flipped: false,
+    flipTimer: 0,
     rootEl: null
   };
 
@@ -308,8 +309,10 @@
     return br.width * br.height - ar.width * ar.height;
   })[0] || null);
 
+  // Auto-learning always plays at 1x so the platform accrues real watch time; the speed menu
+  // restored by restoreSpeedMenu() stays available for manual viewing while auto-learning is off.
   function applySpeed(video) {
-    if (!video || !state.settings.running || !state.settings.forceNormalSpeed) return;
+    if (!video || !state.settings.running) return;
     try {
       if (Math.abs(video.playbackRate - 1) > 0.01) video.playbackRate = 1;
       if (Math.abs(video.defaultPlaybackRate - 1) > 0.01) video.defaultPlaybackRate = 1;
@@ -324,7 +327,7 @@
     applySpeed(video);
 
     video.addEventListener("ratechange", () => {
-      if (!state.settings.running || !state.settings.forceNormalSpeed) return;
+      if (!state.settings.running) return;
       window.setTimeout(() => applySpeed(video), 80);
     });
 
@@ -641,6 +644,10 @@
     const liveRows = catalogRows();
     if (pageLooksCatalog() && liveRows.length) return catalogProgressFromRows(liveRows);
 
+    // Off the catalog, only an active auto-learning session has a meaningful running total.
+    // When stopped, don't resurrect a stale total stored from a previous session.
+    if (!state.settings.running) return { total: 0, completed: 0, percent: 0 };
+
     const total = Number(state.runtime.catalogTotal || 0);
     if (!total) return { total: 0, completed: 0, percent: 0 };
 
@@ -888,10 +895,7 @@
 
   async function tick(reason = "timer") {
     invalidateScans();
-    if (!state.settings.running) {
-      if (state.settings.forceNormalSpeed) videos().forEach(applySpeed);
-      return;
-    }
+    if (!state.settings.running) return;
     if (isLocked()) return;
 
     state.busy = true;
@@ -938,27 +942,6 @@
     invalidateScans();
     window.clearTimeout(state.mutationTimer);
     state.mutationTimer = window.setTimeout(() => tick("dom-change"), 500);
-  }
-
-  function row(labelText, input) {
-    const wrap = document.createElement("label");
-    wrap.className = `${EXT_ID}-row`;
-    const label = document.createElement("span");
-    label.textContent = labelText;
-    wrap.append(label, input);
-    return wrap;
-  }
-
-  function checkbox(key) {
-    const input = document.createElement("input");
-    input.type = "checkbox";
-    input.checked = Boolean(state.settings[key]);
-    input.addEventListener("change", async () => {
-      state.settings[key] = input.checked;
-      await storage.set({ [key]: input.checked });
-      tick(`${key}-changed`);
-    });
-    return input;
   }
 
   async function start() {
@@ -1018,17 +1001,20 @@
   }
 
   function updateProgressDisplay() {
+    const container = document.querySelector(`#${EXT_ID}-progress`);
     const label = document.querySelector(`#${EXT_ID}-progress-label`);
     const fill = document.querySelector(`#${EXT_ID}-progress-fill`);
-    if (!label || !fill) return;
+    if (!container || !label || !fill) return;
 
     const progress = currentLearningProgress();
+    // Nothing detected (not on the catalog and not mid-session): hide the bar entirely rather
+    // than showing a placeholder or a stale total.
     if (!progress.total) {
-      label.textContent = "总进度 等待目录识别";
-      fill.style.width = "0%";
+      container.style.display = "none";
       return;
     }
 
+    container.style.display = "";
     label.textContent = `总进度 ${progress.completed}/${progress.total} · ${progress.percent}%`;
     fill.style.width = `${progress.percent}%`;
   }
@@ -1065,6 +1051,102 @@
     state.panelOpen = shouldOpen;
     if (state.rootEl) state.rootEl.classList.toggle("open", shouldOpen);
     if (shouldOpen) updatePanelSummary();
+    else resetFlip();
+  }
+
+  // One settings switch on the card's back face: a labelled toggle that writes straight to
+  // storage and re-runs a tick so the change takes effect immediately.
+  function settingRow(labelText, key) {
+    const wrap = document.createElement("label");
+    wrap.className = `${EXT_ID}-row`;
+    const label = document.createElement("span");
+    label.textContent = labelText;
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = Boolean(state.settings[key]);
+    input.addEventListener("change", async () => {
+      state.settings[key] = input.checked;
+      await storage.set({ [key]: input.checked });
+      tick(`${key}-changed`);
+    });
+    wrap.append(label, input);
+    return wrap;
+  }
+
+  // The card's back face: a small header with a 完成 button (flips back to the front) and the
+  // behaviour toggles that used to sit on the front panel.
+  function buildSettingsFace() {
+    const back = document.createElement("div");
+    back.className = `${EXT_ID}-face ${EXT_ID}-face-back`;
+
+    const bar = document.createElement("div");
+    bar.className = `${EXT_ID}-titlebar`;
+    const title = document.createElement("div");
+    title.className = `${EXT_ID}-title`;
+    title.textContent = "设置";
+    const done = document.createElement("button");
+    done.type = "button";
+    done.className = `${EXT_ID}-done`;
+    done.textContent = "完成";
+    done.addEventListener("click", () => flipPanel(false));
+    bar.append(title, done);
+
+    const list = document.createElement("div");
+    list.className = `${EXT_ID}-settings-list`;
+    list.append(
+      settingRow("自动播放", "autoPlay"),
+      settingRow("未完成自动补学", "recoverOnUnconfirmedEnd"),
+      settingRow("总时长达标再返回", "enforceCourseTotalTime"),
+      settingRow("跳过做题页", "skipQuestions")
+    );
+
+    const note = document.createElement("div");
+    note.className = `${EXT_ID}-settings-note`;
+    note.textContent = "视频按平台规则固定以 1x 播放，确保积累真实学习时长。";
+
+    back.append(bar, list, note);
+    return back;
+  }
+
+  const GEAR_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>';
+
+  function currentFaces() {
+    const root = state.rootEl;
+    if (!root) return null;
+    const inner = root.querySelector(`.${EXT_ID}-flip-inner`);
+    const front = root.querySelector(`.${EXT_ID}-face-front`);
+    const back = root.querySelector(`.${EXT_ID}-face-back`);
+    return inner && front && back ? { root, inner, front, back } : null;
+  }
+
+  // Flip the card between the front panel and the settings face. The front face stays in flow
+  // so it auto-sizes to its (changing) status text; we only pin an explicit height during the
+  // flip so the card can animate between the two faces' heights, then release it on the front.
+  function flipPanel(toBack) {
+    const faces = currentFaces();
+    if (!faces) return;
+    const { root, inner, front, back } = faces;
+    state.flipped = toBack;
+    inner.style.transition = "transform 0.55s cubic-bezier(0.4, 0.15, 0.2, 1), height 0.45s ease";
+    inner.style.height = `${(toBack ? front : back).offsetHeight}px`;
+    void inner.offsetHeight; // reflow so the next height write animates from this value
+    root.classList.toggle("flipped", toBack);
+    inner.style.height = `${(toBack ? back : front).offsetHeight}px`;
+    window.clearTimeout(state.flipTimer);
+    state.flipTimer = window.setTimeout(() => {
+      inner.style.transition = "";
+      if (!state.flipped) inner.style.height = "";
+    }, 620);
+  }
+
+  function resetFlip() {
+    state.flipped = false;
+    window.clearTimeout(state.flipTimer);
+    const faces = currentFaces();
+    if (!faces) return;
+    faces.root.classList.remove("flipped");
+    faces.inner.style.transition = "";
+    faces.inner.style.height = "";
   }
 
   function renderPanel() {
@@ -1086,6 +1168,14 @@
     title.className = `${EXT_ID}-title`;
     title.textContent = "学习助手";
 
+    const settingsBtn = document.createElement("button");
+    settingsBtn.type = "button";
+    settingsBtn.className = `${EXT_ID}-settings`;
+    settingsBtn.setAttribute("aria-label", "打开设置");
+    settingsBtn.title = "设置";
+    settingsBtn.innerHTML = GEAR_SVG;
+    settingsBtn.addEventListener("click", () => flipPanel(true));
+
     const minimize = document.createElement("button");
     minimize.type = "button";
     minimize.className = `${EXT_ID}-minimize`;
@@ -1095,9 +1185,14 @@
     minimize.addEventListener("click", async () => {
       state.panelOpen = false;
       root.classList.remove("open");
+      resetFlip();
       await storage.set({ panelOpen: false });
     });
-    titleBar.append(title, minimize);
+
+    const controls = document.createElement("div");
+    controls.className = `${EXT_ID}-controls`;
+    controls.append(settingsBtn, minimize);
+    titleBar.append(title, controls);
 
     const primary = document.createElement("button");
     primary.type = "button";
@@ -1119,6 +1214,7 @@
     actions.append(primary, scan);
 
     const progress = document.createElement("div");
+    progress.id = `${EXT_ID}-progress`;
     progress.className = `${EXT_ID}-progress`;
 
     const progressLabel = document.createElement("div");
@@ -1143,18 +1239,16 @@
     summary.id = `${EXT_ID}-summary`;
     summary.className = `${EXT_ID}-summary`;
 
-    panel.append(
-      titleBar,
-      actions,
-      progress,
-      row("自动播放", checkbox("autoPlay")),
-      row("锁定 1x 真实学习", checkbox("forceNormalSpeed")),
-      row("未完成自动补学", checkbox("recoverOnUnconfirmedEnd")),
-      row("总时长达标再返回", checkbox("enforceCourseTotalTime")),
-      row("跳过做题页", checkbox("skipQuestions")),
-      summary,
-      status
-    );
+    // Front face: the live panel. Back face: the settings. They share one card that flips.
+    const front = document.createElement("div");
+    front.className = `${EXT_ID}-face ${EXT_ID}-face-front`;
+    front.append(titleBar, actions, progress, summary, status);
+
+    const inner = document.createElement("div");
+    inner.className = `${EXT_ID}-flip-inner`;
+    inner.append(front, buildSettingsFace());
+
+    panel.append(inner);
 
     const toggle = document.createElement("button");
     toggle.className = `${EXT_ID}-logo-toggle`;

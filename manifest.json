@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "KME Learning Navigator",
   "description": "Auto-play and continue KME learning pages while restoring the hidden player speed control.",
-  "version": "2.4.1",
+  "version": "2.5.0",
   "permissions": [
     "storage"
   ],
@@ -41,7 +41,7 @@
     }
   ],
   "action": {
-    "default_title": "KME Learning Navigator",
+    "default_title": "KME 学习助手",
     "default_icon": {
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png",

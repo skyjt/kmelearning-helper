@@ -28,6 +28,76 @@
   -webkit-backdrop-filter: blur(12px) saturate(1.4);
   backdrop-filter: blur(12px) saturate(1.4);
   box-shadow: 0 18px 48px rgba(20, 27, 70, 0.22), 0 2px 6px rgba(20, 27, 70, 0.08);
+  perspective: 1400px;
+}
+
+/* Flip card: the front face (live panel) and back face (settings) share one card that the
+   ⚙ button rotates between. Each face hides its own backface; the visible one alone is
+   interactive so the hidden face can't intercept clicks. */
+.kme-learning-navigator-flip-inner {
+  position: relative;
+  width: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.55s cubic-bezier(0.4, 0.15, 0.2, 1);
+}
+
+#kme-learning-navigator.flipped .kme-learning-navigator-flip-inner {
+  transform: rotateY(180deg);
+}
+
+.kme-learning-navigator-face {
+  width: 100%;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+.kme-learning-navigator-face-front {
+  position: relative;
+}
+
+.kme-learning-navigator-face-back {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: rotateY(180deg);
+  pointer-events: none;
+}
+
+#kme-learning-navigator.flipped .kme-learning-navigator-face-front {
+  pointer-events: none;
+}
+
+#kme-learning-navigator.flipped .kme-learning-navigator-face-back {
+  pointer-events: auto;
+}
+
+.kme-learning-navigator-done {
+  padding: 6px 14px;
+  border: 1px solid var(--kme-line);
+  border-radius: 8px;
+  background: rgba(36, 107, 254, 0.08);
+  color: var(--kme-accent);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 12.5px;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.kme-learning-navigator-done:hover {
+  background: rgba(36, 107, 254, 0.16);
+}
+
+.kme-learning-navigator-done:active {
+  transform: scale(0.96);
+}
+
+.kme-learning-navigator-settings-note {
+  margin-top: 12px;
+  padding-top: 11px;
+  border-top: 1px solid var(--kme-line);
+  color: var(--kme-muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 #kme-learning-navigator.open .kme-learning-navigator-panel {
@@ -65,7 +135,14 @@
   background: linear-gradient(135deg, var(--kme-accent), var(--kme-accent-2));
 }
 
-.kme-learning-navigator-minimize {
+.kme-learning-navigator-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.kme-learning-navigator-minimize,
+.kme-learning-navigator-settings {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -81,13 +158,20 @@
   transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
 }
 
-.kme-learning-navigator-minimize:hover {
+.kme-learning-navigator-minimize:hover,
+.kme-learning-navigator-settings:hover {
   background: rgba(36, 107, 254, 0.1);
   color: var(--kme-accent);
 }
 
-.kme-learning-navigator-minimize:active {
+.kme-learning-navigator-minimize:active,
+.kme-learning-navigator-settings:active {
   transform: scale(0.92);
+}
+
+.kme-learning-navigator-settings svg {
+  display: block;
+  pointer-events: none;
 }
 
 .kme-learning-navigator-actions {
@@ -333,7 +417,8 @@
     background: rgba(36, 107, 254, 0.18);
   }
 
-  .kme-learning-navigator-minimize {
+  .kme-learning-navigator-minimize,
+  .kme-learning-navigator-settings {
     background: rgba(255, 255, 255, 0.06);
   }
 
