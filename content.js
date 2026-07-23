@@ -770,7 +770,7 @@
       .map((el) => textOf(el))
       .filter((text) => text.length >= 2 && text.length <= 120);
     if (feedbackTexts.some((text) => (
-      /^(?:恭喜.{0,20})?(?:本次)?(?:测验|考试|答题).{0,18}(?:通过|完成|合格)/.test(text) ||
+      /^(?:恭喜(?:您)?[，,!！\s]*)?(?:本次)?(?:测验|考试|答题)(?:已)?(?:通过|完成|合格)(?=$|[\s，,。.!！：:])/.test(text) ||
       /^提交成功/.test(text)
     ))) return true;
     const body = bodyText();

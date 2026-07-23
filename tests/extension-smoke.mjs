@@ -357,6 +357,7 @@ const quizHtml = String.raw`<!doctype html>
 </main>
 <div id="quiz-notice" role="dialog">
   <strong>测验须知</strong>
+  <span>合格分数：60 分</span>
   <span>共 3 题，请检查答案后提交。</span>
   <button id="quiz-notice-close" type="button">我知道了</button>
 </div>
@@ -690,6 +691,12 @@ try {
   await quizPage.waitForFunction(() => !document.querySelector("#kme-learning-navigator")?.classList.contains("flipped"));
   await quizPage.locator(".kme-learning-navigator-primary").click();
   await quizPage.waitForFunction(() => window.__kmeLearningNavigator?.inspect?.()?.running === true);
+  await quizPage.waitForFunction(() => (
+    document.querySelector("#kme-learning-navigator-status")?.innerText.includes("等待你启动 AI 分析")
+  ));
+  if (!quizPage.url().includes("/quiz-ai")) {
+    throw new Error(`quiz notice was mistaken for completion: ${quizPage.url()}`);
+  }
 
   await quizPage.locator("#kme-learning-navigator-quiz-analyze").click();
   await quizPage.waitForFunction(() => (

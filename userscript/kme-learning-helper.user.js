@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         KME 学习助手
 // @namespace    https://github.com/skyjt/kmelearning-helper
-// @version      2.8.0
+// @version      2.8.1
 // @description  自动按目录学习 KME 课程，并通过用户配置的大模型辅助完成可见测验。
 // @author       skyjt
 // @license      MIT
@@ -875,7 +875,7 @@
       .map((el) => textOf(el))
       .filter((text) => text.length >= 2 && text.length <= 120);
     if (feedbackTexts.some((text) => (
-      /^(?:恭喜.{0,20})?(?:本次)?(?:测验|考试|答题).{0,18}(?:通过|完成|合格)/.test(text) ||
+      /^(?:恭喜(?:您)?[，,!！\s]*)?(?:本次)?(?:测验|考试|答题)(?:已)?(?:通过|完成|合格)(?=$|[\s，,。.!！：:])/.test(text) ||
       /^提交成功/.test(text)
     ))) return true;
     const body = bodyText();

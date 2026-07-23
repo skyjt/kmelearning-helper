@@ -3,6 +3,11 @@
 本文件记录 KME 学习助手（kmelearning-helper / KME Learning Navigator）各版本的主要变化。
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.8.1] - 2026-07-23
+
+### 修复（Fixed）
+- 修复测验须知中的“合格分数”被误判为测验已完成，导致自动学习离开答题页的问题。
+
 ## [2.8.0] - 2026-07-23
 
 ### 新增（Added）
