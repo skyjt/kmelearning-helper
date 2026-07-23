@@ -1,6 +1,6 @@
 # KME 学习助手（kmelearning-helper）
 
-> 一个给 `pc.kmelearning.com` 学习页用的 Chrome 扩展（Manifest V3）。
+> 一个给 `pc.kmelearning.com` 学习页用的自动学习助手，提供 Chrome 扩展（Manifest V3）和油猴脚本两个版本。
 > 它会在页面右下角放一个“学习助手”浮窗，帮你**按目录顺序自动播放课程**、等平台确认完成，然后接着学下一门没学完的课。
 
 ---
@@ -9,7 +9,7 @@
 
 如果你是 **江苏农商行** 的员工，大概率对「学习地图」不陌生：一张图里排着几十门必修课，每一门都要手动点开、从头看到尾、等系统确认完成、再返回点下一门……一轮下来，光是点击和干等就耗掉大半天，真正的注意力却很难留在内容上。
 
-**这个扩展就是为这群人做的**——把「点开 → 等播完 → 返回 → 下一门」这套机械重复交给浏览器自动完成，把时间还给真正需要动脑的工作和学习。
+**这个助手就是为这群人做的**——把「点开 → 等播完 → 返回 → 下一门」这套机械重复交给浏览器自动完成，把时间还给真正需要动脑的工作和学习。
 
 > 它按平台规则**老老实实地以 1x 播放**，不跳过、不伪造完成，所以同样适用于其他跑在 `pc.kmelearning.com` 上的学习平台。
 
@@ -19,7 +19,7 @@
 
 进入学习目录后，平时你要做的事是：点开一门课 → 等它播完 → 返回列表 → 再点下一门……重复几十遍。
 
-这个扩展把这套重复操作自动化：
+这个助手把这套重复操作自动化：
 
 ```
 开始自动学习
@@ -49,16 +49,27 @@
 
 ## 快速开始
 
-### 1. 安装扩展
+### 1. 选择安装方式
 
-**方式一：下载 ZIP（推荐新手）**
+**方式一：油猴脚本（推荐）**
+
+1. 先安装 [Tampermonkey](https://www.tampermonkey.net/) 等用户脚本管理器。
+2. 点击 [安装 KME 学习助手油猴版](https://raw.githubusercontent.com/skyjt/kmelearning-helper/main/userscript/kme-learning-helper.user.js)。
+3. 在脚本管理器打开的安装页确认安装。
+4. 打开或刷新 `https://pc.kmelearning.com/` 学习页面。
+
+油猴版会跟随仓库里的版本号检查更新，核心功能和 Chrome 扩展保持一致。
+
+**方式二：Chrome 扩展**
+
+下载 ZIP：
 
 1. 打开 GitHub 仓库页 → 点 `Code` → `Download ZIP`，下载后解压。
 2. Chrome 地址栏进入 `chrome://extensions`。
 3. 打开右上角的 **开发者模式**。
 4. 点 **加载已解压的扩展程序**，选中解压后的文件夹（里面要有 `manifest.json`）。
 
-**方式二：Git 克隆**
+也可以用 Git 克隆：
 
 ```bash
 git clone https://github.com/skyjt/kmelearning-helper.git
@@ -66,12 +77,14 @@ git clone https://github.com/skyjt/kmelearning-helper.git
 
 然后同样在 `chrome://extensions` 里 **加载已解压的扩展程序**，选中克隆下来的目录。
 
+> 同一个浏览器请只启用一个版本，避免运行状态和设置来源混淆。
+
 ### 2. 开始学习
 
 1. 登录并进入 `pc.kmelearning.com` 的学习目录页。
 2. 确认页面右下角出现 **“学习助手”** 浮窗。
 3. 点 **开始自动学习**。
-4. 保持标签页打开就行，扩展会自动按“播完 → 返回 → 下一门”的顺序往下学。
+4. 保持标签页打开就行，助手会自动按“播完 → 返回 → 下一门”的顺序往下学。
 
 > 💡 浮窗可以最小化成右下角的小图标，点一下或鼠标移上去就能展开。
 
@@ -131,7 +144,7 @@ git clone https://github.com/skyjt/kmelearning-helper.git
 
 ## 更新日志
 
-完整记录见 [CHANGELOG.md](CHANGELOG.md)。最近一次更新（**v2.5.0**）：行为开关收进浮窗的**翻转设置面**（点 ⚙ 翻到背面、点「完成」翻回），浮窗更清爽；移除「锁定 1x」开关——1x 现为固定核心行为。
+完整记录见 [CHANGELOG.md](CHANGELOG.md)。最近一次更新（**v2.6.0**）：新增与 Chrome 扩展共用核心代码的单文件油猴版，并让烟雾测试同时覆盖两种安装形态。
 
 ---
 
@@ -153,6 +166,7 @@ git clone https://github.com/skyjt/kmelearning-helper.git
 ```bash
 npm install        # 安装依赖
 npm test           # 运行 Playwright 烟雾测试
+npm run build:userscript  # 重新生成油猴单文件
 npm run icons      # 重新生成图标
 ```
 
@@ -172,7 +186,9 @@ zip -r "dist/kmelearning-helper-v$(node -p "require('./manifest.json').version")
 | `content.js` | 注入到学习页面的核心逻辑（含翻转设置面） |
 | `styles.css` | 浮窗、翻转设置面和控件样式 |
 | `icons/` | 扩展图标 |
-| `tests/extension-smoke.mjs` | 基于 Playwright 的本地烟雾测试 |
+| `userscript/kme-learning-helper.user.js` | 可直接安装的油猴单文件（自动生成） |
+| `tests/extension-smoke.mjs` | 同时覆盖 Chrome 版和油猴版的 Playwright 烟雾测试 |
+| `tools/build-userscript.mjs` | 从共享核心、样式和图标生成油猴单文件 |
 | `tools/generate-icons.mjs` | 图标生成脚本 |
 
 ---

@@ -10,6 +10,22 @@ const { chromium } = require("playwright");
 
 const sourceExtensionPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const chromeExecutable = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const targetArgument = process.argv.find((argument) => argument.startsWith("--target="));
+const target = targetArgument?.split("=")[1] || "extension";
+if (!new Set(["extension", "userscript"]).has(target)) {
+  throw new Error(`unknown smoke-test target: ${target}`);
+}
+
+async function injectHelper(page) {
+  if (target === "userscript") {
+    await page.addScriptTag({
+      path: path.join(sourceExtensionPath, "userscript", "kme-learning-helper.user.js")
+    });
+    return;
+  }
+  await page.addStyleTag({ path: path.join(sourceExtensionPath, "styles.css") });
+  await page.addScriptTag({ path: path.join(sourceExtensionPath, "content.js") });
+}
 
 const html = String.raw`<!doctype html>
 <html>
@@ -205,6 +221,7 @@ const context = await browser.newContext();
 try {
   await context.addInitScript(() => {
     window.__mockChromeStorage = {};
+    window.__mockUserscriptStorage = {};
     window.chrome = {
       storage: {
         local: {
@@ -218,6 +235,21 @@ try {
         }
       }
     };
+    window.GM_getValue = (key, fallback) => (
+      Object.hasOwn(window.__mockUserscriptStorage, key)
+        ? window.__mockUserscriptStorage[key]
+        : fallback
+    );
+    window.GM_setValue = (key, value) => {
+      window.__mockUserscriptStorage[key] = value;
+    };
+    window.GM_addStyle = (css) => {
+      const style = document.createElement("style");
+      style.dataset.kmeUserscript = "";
+      style.textContent = css;
+      document.documentElement.appendChild(style);
+      return style;
+    };
   });
 
   await context.route("https://pc.kmelearning.com/**", (route) => {
@@ -227,8 +259,7 @@ try {
 
   const page = context.pages()[0] || await context.newPage();
   await page.goto("https://pc.kmelearning.com/jsncxyslhs/home/training/study/mock");
-  await page.addStyleTag({ path: path.join(sourceExtensionPath, "styles.css") });
-  await page.addScriptTag({ path: path.join(sourceExtensionPath, "content.js") });
+  await injectHelper(page);
   try {
     await page.waitForSelector("#kme-learning-navigator", { timeout: 10000 });
   } catch (error) {
@@ -256,6 +287,19 @@ try {
   await page.locator(".kme-learning-navigator-minimize").click();
   await page.waitForSelector(".kme-learning-navigator-panel", { state: "hidden", timeout: 5000 });
   await page.waitForSelector(".kme-learning-navigator-logo-toggle", { state: "visible", timeout: 5000 });
+  if (target === "userscript") {
+    const assets = await page.evaluate(() => {
+      const icon = document.querySelector(".kme-learning-navigator-logo-toggle img");
+      return {
+        styleInjected: Boolean(document.querySelector("style[data-kme-userscript]")),
+        iconUrl: icon?.src || "",
+        iconLoaded: Boolean(icon?.complete && icon.naturalWidth > 0)
+      };
+    });
+    if (!assets.styleInjected || !assets.iconUrl.startsWith("data:image/svg+xml") || !assets.iconLoaded) {
+      throw new Error(`userscript assets failed: ${JSON.stringify(assets)}`);
+    }
+  }
   await page.evaluate(() => {
     document.querySelector(".kme-learning-navigator-logo-toggle")
       ?.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
@@ -263,6 +307,11 @@ try {
   await page.waitForSelector(".kme-learning-navigator-panel", { state: "visible", timeout: 5000 });
 
   await page.locator(".kme-learning-navigator-primary").click();
+  await page.waitForFunction((currentTarget) => (
+    currentTarget === "userscript"
+      ? window.__mockUserscriptStorage.running === true
+      : window.__mockChromeStorage.running === true
+  ), target, { timeout: 5000 });
   await page.waitForFunction(() => document.body.innerText.includes("课程内容：网络安全意识专题培训"), undefined, { timeout: 10000 });
   await page.waitForFunction(() => document.body.innerText.includes("课程内容：电子邮件安全"), undefined, { timeout: 20000 });
 
@@ -294,8 +343,7 @@ try {
 
   const timePage = await context.newPage();
   await timePage.goto("https://pc.kmelearning.com/jsncxyslhs/home/course/time-short");
-  await timePage.addStyleTag({ path: path.join(sourceExtensionPath, "styles.css") });
-  await timePage.addScriptTag({ path: path.join(sourceExtensionPath, "content.js") });
+  await injectHelper(timePage);
   await timePage.waitForSelector("#kme-learning-navigator", { timeout: 10000 });
   // A course player page is not the directory, so the panel starts minimized; restore it
   // before driving the controls.
@@ -327,6 +375,7 @@ try {
 
   console.log(JSON.stringify({
     ok: true,
+    target,
     initialCatalogCount: initial.catalog.length,
     progress: {
       initial: "1/3",

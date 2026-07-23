@@ -3,6 +3,17 @@
 本文件记录 KME 学习助手（kmelearning-helper / KME Learning Navigator）各版本的主要变化。
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.6.0] - 2026-07-23
+
+### 新增（Added）
+- 新增可直接安装的 `userscript/kme-learning-helper.user.js`，油猴版与 Chrome 扩展共用自动学习核心、浮窗样式和图标。
+- 新增油猴构建命令和产物一致性检查；版本、样式、图标或核心逻辑变更后可自动重新生成单文件。
+- Playwright 烟雾测试增加油猴注入模式，完整流程会分别验证 Chrome 版与油猴版。
+
+### 变更（Changed）
+- 页面增加跨运行环境的加载标记，误开两个版本时只启动一套自动学习循环。
+- 安装和开发文档增加油猴版的安装、更新与构建说明。
+
 ## [2.5.0] - 2026-06-07
 
 ### 变更（Changed）

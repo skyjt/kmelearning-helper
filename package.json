@@ -1,15 +1,21 @@
 {
   "name": "kmelearning-helper",
-  "version": "2.5.0",
-  "description": "Chrome MV3 helper for pc.kmelearning.com learning pages.",
+  "version": "2.6.0",
+  "description": "Chrome MV3 and userscript helper for pc.kmelearning.com learning pages.",
   "type": "module",
   "scripts": {
-    "test": "node tests/extension-smoke.mjs",
-    "test:smoke": "node tests/extension-smoke.mjs",
+    "build:userscript": "node tools/build-userscript.mjs",
+    "check:userscript": "node tools/build-userscript.mjs --check",
+    "test": "npm run check:userscript && npm run test:extension && npm run test:userscript",
+    "test:smoke": "npm test",
+    "test:extension": "node tests/extension-smoke.mjs --target=extension",
+    "test:userscript": "node tests/extension-smoke.mjs --target=userscript",
     "icons": "node tools/generate-icons.mjs"
   },
   "keywords": [
     "chrome-extension",
+    "userscript",
+    "tampermonkey",
     "manifest-v3",
     "kmelearning"
   ],
