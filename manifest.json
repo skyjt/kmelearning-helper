@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "KME Learning Navigator",
-  "description": "Auto-play and continue KME learning pages while restoring the hidden player speed control.",
-  "version": "2.6.0",
+  "description": "Detect unfinished KME tasks, confirm the selected task, and continue its learning pages automatically.",
+  "version": "2.7.0",
   "permissions": [
     "storage"
   ],

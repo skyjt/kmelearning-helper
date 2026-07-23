@@ -133,6 +133,82 @@ const html = String.raw`<!doctype html>
 </body>
 </html>`;
 
+const homeHtml = String.raw`<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>江苏农商联合银行</title>
+  <style>
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    main { min-height: 600px; padding: 24px; background: #f6f7f9; }
+    .home-heading { margin: 24px 0 12px; }
+    .home-heading-row { display: flex; align-items: center; justify-content: space-between; }
+    .cursor-pointer { cursor: pointer; }
+    .task-grid { display: grid; grid-template-columns: repeat(2, 320px); gap: 16px; }
+    .task-card { display: flex; min-height: 64px; align-items: center; gap: 8px; padding: 16px; background: #fff; }
+    .task-card img { width: 36px; height: 36px; }
+    .panelContent__VcTCG { display: flex; width: 720px; min-height: 52px; align-items: center; justify-content: space-between; margin: 8px 0; padding: 0 16px; border: 1px solid #ddd; cursor: pointer; }
+    .anticon5-check { color: #246bfe; }
+    .lesson-item { width: 320px; min-height: 48px; padding: 12px; background: #eff5ff; }
+  </style>
+</head>
+<body>
+<main id="app"></main>
+<script>
+  const app = document.getElementById("app");
+  window.__mockTaskLog = [];
+
+  function check() {
+    return '<span class="anticon5-check" data-icon="check">✓</span>';
+  }
+
+  function renderHome() {
+    app.innerHTML =
+      '<div class="home-heading"><div class="home-heading-row"><span>我的任务</span>' +
+      '<div class="cursor-pointer"><span>更多</span></div></div></div>' +
+      '<div class="task-section"><div class="task-grid">' +
+      '<div class="task-card cursor-pointer" data-task="required">' +
+      '<img src="/static/media/task_training.mock.svg" alt=""><div><p>2026年党员线上学习课程（必修）</p><span>项目</span></div></div>' +
+      '<div class="task-card cursor-pointer" data-task="complete">' +
+      '<img src="/static/media/task_training.mock.svg" alt=""><div><p>已完成的历史任务</p><span>项目</span>' + check() + '</div></div>' +
+      '</div></div>';
+
+    document.querySelector('[data-task="required"]').addEventListener("click", () => {
+      window.__mockTaskLog.push("task:2026年党员线上学习课程（必修）");
+      renderDetail();
+    });
+    document.querySelector('[data-task="complete"]').addEventListener("click", () => {
+      window.__mockTaskLog.push("task:completed");
+    });
+  }
+
+  function renderDetail() {
+    history.pushState({}, "", "/jsncxyslhs/home/training/detail/task-required");
+    app.innerHTML = '<h1>2026年党员线上学习课程（必修）</h1><p>2个活动</p><button id="enter-task">进入学习</button>';
+    document.getElementById("enter-task").addEventListener("click", () => {
+      window.__mockTaskLog.push("enter:task");
+      renderTaskCatalog();
+    });
+  }
+
+  function renderTaskCatalog() {
+    history.pushState({}, "", "/jsncxyslhs/home/training/study/task-required");
+    app.innerHTML = '<h1>2026年党员线上学习课程（必修）</h1><p>2个活动，1个活动未完成</p>' +
+      '<div class="panelContent__VcTCG" data-course="first"><span>任务课程一 课程</span><span>未完成</span></div>' +
+      '<div class="panelContent__VcTCG"><span>任务课程二 课程</span>' + check() + '</div>';
+    document.querySelector('[data-course="first"]').addEventListener("click", () => {
+      window.__mockTaskLog.push("course:任务课程一");
+      history.pushState({}, "", "/jsncxyslhs/home/course/study/task-course-1");
+      app.innerHTML = '<h1>课程内容：任务课程一</h1><aside class="scrollBody__Jdo84">' +
+        '<div class="lesson-item active"><span>任务视频 课程</span><span>未完成</span></div></aside>';
+    });
+  }
+
+  renderHome();
+</script>
+</body>
+</html>`;
+
 const timeShortHtml = String.raw`<!doctype html>
 <html>
 <head>
@@ -253,11 +329,59 @@ try {
   });
 
   await context.route("https://pc.kmelearning.com/**", (route) => {
-    const body = route.request().url().includes("/time-short") ? timeShortHtml : html;
+    const requestUrl = route.request().url();
+    const body = requestUrl.includes("/time-short")
+      ? timeShortHtml
+      : (requestUrl.includes("/home/index") ? homeHtml : html);
     route.fulfill({ status: 200, contentType: "text/html", body });
   });
 
-  const page = context.pages()[0] || await context.newPage();
+  const homePage = context.pages()[0] || await context.newPage();
+  await homePage.goto("https://pc.kmelearning.com/jsncxyslhs/home/index");
+  await injectHelper(homePage);
+  await homePage.waitForSelector("#kme-learning-navigator", { timeout: 10000 });
+  await homePage.waitForSelector(".kme-learning-navigator-panel", { state: "visible", timeout: 5000 });
+
+  const homeInitial = await homePage.evaluate(() => ({
+    panel: document.querySelector("#kme-learning-navigator")?.innerText || "",
+    taskButtons: document.querySelectorAll(".kme-learning-navigator-task-item").length,
+    inspect: window.__kmeLearningNavigator?.inspect?.()
+  }));
+  if (!homeInitial.panel.includes("未完成任务 1") || homeInitial.taskButtons !== 1) {
+    throw new Error(`home task detection failed: ${JSON.stringify(homeInitial)}`);
+  }
+  if (homeInitial.inspect?.homeTasks?.length !== 2 || homeInitial.inspect.homeTasks.filter((task) => task.complete).length !== 1) {
+    throw new Error(`home task completion filter failed: ${JSON.stringify(homeInitial.inspect?.homeTasks)}`);
+  }
+
+  await homePage.locator(".kme-learning-navigator-task-item").click();
+  await homePage.waitForSelector(".kme-learning-navigator-task-confirmation", { state: "visible", timeout: 5000 });
+  const beforeConfirmation = await homePage.evaluate(() => ({
+    log: window.__mockTaskLog,
+    running: window.__kmeLearningNavigator?.inspect?.()?.running,
+    confirmation: document.querySelector(".kme-learning-navigator-task-confirmation")?.innerText || ""
+  }));
+  if (beforeConfirmation.log.length || beforeConfirmation.running || !beforeConfirmation.confirmation.includes("确认开始")) {
+    throw new Error(`task confirmation guard failed: ${JSON.stringify(beforeConfirmation)}`);
+  }
+
+  await homePage.locator(".kme-learning-navigator-task-cancel").click();
+  await homePage.waitForSelector(".kme-learning-navigator-task-confirmation", { state: "hidden", timeout: 5000 });
+  await homePage.locator(".kme-learning-navigator-task-item").click();
+  await homePage.locator(".kme-learning-navigator-task-confirm").click();
+  await homePage.waitForFunction(() => window.__mockTaskLog.includes("task:2026年党员线上学习课程（必修）"), undefined, { timeout: 5000 });
+  await homePage.waitForFunction(() => window.__mockTaskLog.includes("enter:task"), undefined, { timeout: 12000 });
+  await homePage.waitForFunction(() => window.__mockTaskLog.includes("course:任务课程一"), undefined, { timeout: 12000 });
+  const homeFinal = await homePage.evaluate(() => ({
+    log: window.__mockTaskLog,
+    url: location.href,
+    text: document.body.innerText
+  }));
+  if (!homeFinal.text.includes("课程内容：任务课程一")) {
+    throw new Error(`task auto navigation failed: ${JSON.stringify(homeFinal)}`);
+  }
+
+  const page = await context.newPage();
   await page.goto("https://pc.kmelearning.com/jsncxyslhs/home/training/study/mock");
   await injectHelper(page);
   try {
@@ -376,6 +500,10 @@ try {
   console.log(JSON.stringify({
     ok: true,
     target,
+    homeTaskNavigation: {
+      unfinished: homeInitial.taskButtons,
+      log: homeFinal.log
+    },
     initialCatalogCount: initial.catalog.length,
     progress: {
       initial: "1/3",

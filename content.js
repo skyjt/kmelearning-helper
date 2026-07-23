@@ -57,6 +57,9 @@
     panelTimer: 0,
     flipped: false,
     flipTimer: 0,
+    homeTaskSignature: "",
+    pendingHomeTaskKey: "",
+    taskPanelAutoOpenedUrl: "",
     rootEl: null
   };
 
@@ -425,6 +428,75 @@
       });
     return dedupeElements(candidates);
   });
+
+  function isHomePage() {
+    return /\/home\/index\/?$/.test(location.pathname);
+  }
+
+  // The signed-in home page renders current work under the "我的任务" heading. The task
+  // cards do not expose links or data attributes, so scope the scan to that section and use
+  // the platform's task icon plus its clickable card as the stable DOM contract.
+  function homeTaskSection() {
+    if (!isHomePage()) return null;
+    const heading = [...document.querySelectorAll("span, h1, h2, h3, h4")]
+      .find((el) => visible(el) && textOf(el) === "我的任务");
+    if (!heading) return null;
+
+    let current = heading;
+    for (let depth = 0; current && depth < 6; depth += 1, current = current.parentElement) {
+      const sibling = current.nextElementSibling;
+      if (!sibling) continue;
+      if (sibling.querySelector("img[src*='task_']")) return sibling;
+    }
+    return null;
+  }
+
+  const homeTaskCards = memoScan(() => {
+    const section = homeTaskSection();
+    if (!section) return [];
+
+    const iconCards = [...section.querySelectorAll("img[src*='task_']")]
+      .map((icon) => icon.closest("[class*='cursor-pointer'], button, a, [role='button']") || icon.parentElement)
+      .filter(Boolean);
+    const fallbackCards = iconCards.length ? [] : [...section.querySelectorAll("[class*='cursor-pointer'], button, a, [role='button']")];
+    return dedupeElements([...iconCards, ...fallbackCards]
+      .filter(visible)
+      .filter((el) => meaningfulRowText(textOf(el))));
+  });
+
+  function taskCardTitle(card) {
+    const titleEl = [...card.querySelectorAll("p[title], [data-title], p, h3, h4")]
+      .find((el) => {
+        const text = normalize(el.getAttribute("title") || el.getAttribute("data-title") || textOf(el));
+        return text.length >= 2 && text.length <= 160;
+      });
+    const title = normalize(titleEl?.getAttribute("title") || titleEl?.getAttribute("data-title") || textOf(titleEl));
+    return title || titleFromText(textOf(card));
+  }
+
+  function homeTaskInfos() {
+    const occurrences = new Map();
+    return homeTaskCards().map((card) => {
+      const title = taskCardTitle(card);
+      const compactTitle = compact(title);
+      const occurrence = occurrences.get(compactTitle) || 0;
+      occurrences.set(compactTitle, occurrence + 1);
+      const type = [...card.querySelectorAll("span, small")]
+        .map((el) => textOf(el))
+        .find((text) => text && text !== title && text.length <= 16) || "学习任务";
+      return {
+        card,
+        title,
+        type,
+        key: `${compactTitle}::${occurrence}`,
+        complete: itemComplete(card)
+      };
+    }).filter((task) => task.title);
+  }
+
+  function unfinishedHomeTasks() {
+    return homeTaskInfos().filter((task) => !task.complete);
+  }
 
   function pageLooksCatalog() {
     const rows = catalogRows();
@@ -919,6 +991,11 @@
         await handleCatalog();
       } else if (pageLooksContent()) {
         await handleContent();
+      } else if (isHomePage()) {
+        state.settings.running = false;
+        await storage.set({ running: false });
+        setStatus("请选择一个未完成任务后开始学习");
+        syncRunningUI();
       } else {
         const started = await clickStartControl();
         if (!started) setStatus(`等待学习页面加载：${reason}`);
@@ -946,14 +1023,16 @@
     if (mutations && mutations.length && !hasExternalMutation(mutations)) return;
     invalidateScans();
     window.clearTimeout(state.mutationTimer);
-    state.mutationTimer = window.setTimeout(() => tick("dom-change"), 500);
+    state.mutationTimer = window.setTimeout(() => {
+      updatePanelSummary();
+      tick("dom-change");
+    }, 500);
   }
 
-  async function start() {
-    const progress = pageLooksCatalog() ? catalogProgressFromRows() : currentLearningProgress();
+  async function beginLearningSession({ catalogUrl, progress, status }) {
     await runtimePatch({
-      catalogUrl: pageLooksCatalog() ? location.href : state.runtime.catalogUrl,
-      currentCourseTitle: state.runtime.currentCourseTitle || "",
+      catalogUrl,
+      currentCourseTitle: "",
       completedCourseTitles: [],
       skippedTitles: [],
       lastTargetKey: "",
@@ -963,15 +1042,59 @@
       lastCourseRequiredSeconds: 0,
       lastCourseLearnedSeconds: 0,
       lastCourseTimeCheckedAt: 0,
-      catalogTotal: progress.total ? progress.total : Number(state.runtime.catalogTotal || 0),
-      catalogCompleted: progress.total ? progress.completed : Number(state.runtime.catalogCompleted || 0),
-      catalogProgressAt: progress.total ? now() : Number(state.runtime.catalogProgressAt || 0)
+      catalogTotal: Number(progress.total || 0),
+      catalogCompleted: Number(progress.completed || 0),
+      catalogProgressAt: progress.total ? now() : 0
     });
     state.settings.running = true;
     await storage.set({ running: true, runtime: state.runtime });
-    setStatus("已启动，开始寻找第一个未完成课程");
+    setStatus(status);
     syncRunningUI();
+  }
+
+  async function start() {
+    const homeTasks = unfinishedHomeTasks();
+    if (isHomePage()) {
+      setStatus(homeTasks.length ? "请从未完成任务列表中选择一项" : "当前没有检测到未完成任务");
+      updateHomeTaskDisplay(true);
+      return;
+    }
+
+    const onCatalog = pageLooksCatalog();
+    const progress = onCatalog ? catalogProgressFromRows() : currentLearningProgress();
+    await beginLearningSession({
+      catalogUrl: onCatalog ? location.href : state.runtime.catalogUrl,
+      progress: progress.total ? progress : {
+        total: Number(state.runtime.catalogTotal || 0),
+        completed: Number(state.runtime.catalogCompleted || 0)
+      },
+      status: "已启动，开始寻找第一个未完成课程"
+    });
     tick("start");
+  }
+
+  async function startHomeTask(taskKey) {
+    invalidateScans();
+    const task = unfinishedHomeTasks().find((item) => item.key === taskKey);
+    if (!task) {
+      hideTaskConfirmation();
+      updateHomeTaskDisplay(true);
+      setStatus("任务列表已更新，请重新选择");
+      return;
+    }
+
+    hideTaskConfirmation();
+    await beginLearningSession({
+      catalogUrl: "",
+      progress: { total: 0, completed: 0 },
+      status: `准备进入任务：${task.title}`
+    });
+    if (!clickElement(task.card, `进入任务：${task.title}`)) {
+      state.settings.running = false;
+      await storage.set({ running: false });
+      setStatus("任务卡片暂时无法点击，请刷新页面后重试");
+      syncRunningUI();
+    }
   }
 
   async function stop() {
@@ -981,7 +1104,95 @@
     syncRunningUI();
   }
 
+  function hideTaskConfirmation() {
+    state.pendingHomeTaskKey = "";
+    const confirmation = document.querySelector(`#${EXT_ID}-task-confirmation`);
+    const list = document.querySelector(`#${EXT_ID}-task-list`);
+    if (confirmation) confirmation.hidden = true;
+    if (list) list.hidden = false;
+  }
+
+  function showTaskConfirmation(taskKey) {
+    const task = unfinishedHomeTasks().find((item) => item.key === taskKey);
+    if (!task) {
+      updateHomeTaskDisplay(true);
+      setStatus("任务列表已更新，请重新选择");
+      return;
+    }
+
+    state.pendingHomeTaskKey = task.key;
+    const confirmation = document.querySelector(`#${EXT_ID}-task-confirmation`);
+    const title = document.querySelector(`#${EXT_ID}-task-confirmation-title`);
+    const list = document.querySelector(`#${EXT_ID}-task-list`);
+    if (!confirmation || !title) return;
+    title.textContent = `开始自动学习“${task.title}”吗？`;
+    confirmation.hidden = false;
+    if (list) list.hidden = true;
+    setStatus("等待确认后进入任务");
+  }
+
+  function updateHomeTaskDisplay(force = false) {
+    const container = document.querySelector(`#${EXT_ID}-tasks`);
+    const list = document.querySelector(`#${EXT_ID}-task-list`);
+    const count = document.querySelector(`#${EXT_ID}-task-count`);
+    if (!container || !list || !count) return;
+
+    if (!isHomePage()) {
+      container.hidden = true;
+      state.homeTaskSignature = "";
+      hideTaskConfirmation();
+      return;
+    }
+
+    const tasks = unfinishedHomeTasks();
+    container.hidden = false;
+    count.textContent = `未完成任务 ${tasks.length}`;
+
+    const signature = tasks.map((task) => `${task.key}|${task.title}|${task.type}`).join("\n");
+    if (force || signature !== state.homeTaskSignature) {
+      state.homeTaskSignature = signature;
+      list.replaceChildren();
+
+      if (!tasks.length) {
+        const empty = document.createElement("div");
+        empty.className = `${EXT_ID}-task-empty`;
+        empty.textContent = "当前没有检测到未完成任务";
+        list.append(empty);
+        hideTaskConfirmation();
+      } else {
+        tasks.forEach((task) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = `${EXT_ID}-task-item`;
+          button.dataset.taskKey = task.key;
+          button.disabled = state.settings.running;
+
+          const taskTitle = document.createElement("span");
+          taskTitle.className = `${EXT_ID}-task-title`;
+          taskTitle.textContent = task.title;
+          const taskType = document.createElement("span");
+          taskType.className = `${EXT_ID}-task-type`;
+          taskType.textContent = task.type;
+          button.append(taskTitle, taskType);
+          button.addEventListener("click", () => showTaskConfirmation(task.key));
+          list.append(button);
+        });
+      }
+    }
+
+    if (tasks.length && state.taskPanelAutoOpenedUrl !== location.href) {
+      state.taskPanelAutoOpenedUrl = location.href;
+      if (!state.panelOpen) {
+        state.panelOpen = true;
+        state.rootEl?.classList.add("open");
+      }
+    }
+
+    syncRunningUI();
+  }
+
   function updatePanelSummary() {
+    updateHomeTaskDisplay();
     // Panel content is display:none while minimized; skip the expensive DOM scans until the
     // user restores it (restore() calls this again to refresh).
     if (!state.panelOpen) return;
@@ -992,6 +1203,7 @@
     const contentCount = contentItems().length;
     const video = primaryVideo();
     const parts = [];
+    if (isHomePage()) parts.push(`未完成任务 ${unfinishedHomeTasks().length}`);
     if (catalogCount) parts.push(`目录 ${catalogCount}`);
     if (contentCount) parts.push(`内容 ${contentCount}`);
     if (video && Number.isFinite(video.duration)) {
@@ -1030,10 +1242,17 @@
     const primary = document.querySelector(`.${EXT_ID}-primary`);
     if (primary) {
       primary.classList.toggle("is-running", state.settings.running);
-      primary.textContent = state.settings.running ? "停止自动学习" : "开始自动学习";
+      primary.textContent = state.settings.running
+        ? "停止自动学习"
+        : (isHomePage()
+          ? (unfinishedHomeTasks().length ? "选择下方任务" : "检查任务")
+          : "开始自动学习");
     }
     const dot = document.querySelector(`.${EXT_ID}-logo-dot`);
     if (dot) dot.classList.toggle("is-running", state.settings.running);
+    document.querySelectorAll(`.${EXT_ID}-task-item`).forEach((button) => {
+      button.disabled = state.settings.running;
+    });
   }
 
   // The floating panel should only auto-expand on the training "study" page — the real
@@ -1044,6 +1263,15 @@
     return /\/home\/training\/study(?:\/|$)/.test(location.pathname);
   }
 
+  function shouldAutoOpenPanel() {
+    if (isStudyCatalogPage()) return true;
+    if (isHomePage() && unfinishedHomeTasks().length) {
+      state.taskPanelAutoOpenedUrl = location.href;
+      return true;
+    }
+    return false;
+  }
+
   // Re-apply that per-page default whenever the URL changes. The site is a single-page app,
   // so navigating from the directory into a course (or back) does not reload the content
   // script; without this the panel would keep whatever state it had. We only act on an actual
@@ -1051,12 +1279,19 @@
   function syncPanelForUrl() {
     if (state.panelUrl === location.href) return;
     state.panelUrl = location.href;
-    const shouldOpen = isStudyCatalogPage();
-    if (shouldOpen === state.panelOpen) return;
+    state.homeTaskSignature = "";
+    state.taskPanelAutoOpenedUrl = "";
+    hideTaskConfirmation();
+    const shouldOpen = shouldAutoOpenPanel();
     state.panelOpen = shouldOpen;
     if (state.rootEl) state.rootEl.classList.toggle("open", shouldOpen);
-    if (shouldOpen) updatePanelSummary();
-    else resetFlip();
+    if (shouldOpen) {
+      updateHomeTaskDisplay(true);
+      updatePanelSummary();
+    } else {
+      updateHomeTaskDisplay(true);
+      resetFlip();
+    }
   }
 
   // One settings switch on the card's back face: a labelled toggle that writes straight to
@@ -1212,11 +1447,71 @@
     scan.type = "button";
     scan.className = `${EXT_ID}-secondary`;
     scan.textContent = "立即检查";
-    scan.addEventListener("click", () => tick("manual"));
+    scan.addEventListener("click", () => {
+      invalidateScans();
+      updateHomeTaskDisplay(true);
+      if (isHomePage() && !state.settings.running) {
+        const taskCount = unfinishedHomeTasks().length;
+        setStatus(taskCount ? `检测到 ${taskCount} 个未完成任务` : "当前没有检测到未完成任务");
+      } else {
+        tick("manual");
+      }
+    });
 
     const actions = document.createElement("div");
     actions.className = `${EXT_ID}-actions`;
     actions.append(primary, scan);
+
+    const tasks = document.createElement("section");
+    tasks.id = `${EXT_ID}-tasks`;
+    tasks.className = `${EXT_ID}-tasks`;
+    tasks.hidden = true;
+
+    const taskHeader = document.createElement("div");
+    taskHeader.className = `${EXT_ID}-task-header`;
+    const taskCount = document.createElement("span");
+    taskCount.id = `${EXT_ID}-task-count`;
+    taskCount.textContent = "未完成任务 0";
+    const taskHint = document.createElement("span");
+    taskHint.textContent = "点击选择";
+    taskHeader.append(taskCount, taskHint);
+
+    const taskList = document.createElement("div");
+    taskList.id = `${EXT_ID}-task-list`;
+    taskList.className = `${EXT_ID}-task-list`;
+
+    const taskConfirmation = document.createElement("div");
+    taskConfirmation.id = `${EXT_ID}-task-confirmation`;
+    taskConfirmation.className = `${EXT_ID}-task-confirmation`;
+    taskConfirmation.setAttribute("role", "dialog");
+    taskConfirmation.setAttribute("aria-label", "确认自动学习任务");
+    taskConfirmation.hidden = true;
+
+    const taskConfirmationTitle = document.createElement("div");
+    taskConfirmationTitle.id = `${EXT_ID}-task-confirmation-title`;
+    taskConfirmationTitle.className = `${EXT_ID}-task-confirmation-title`;
+    const taskConfirmationText = document.createElement("p");
+    taskConfirmationText.textContent = "确认后将进入该任务，并按顺序学习其中未完成的课程。";
+    const taskConfirmationActions = document.createElement("div");
+    taskConfirmationActions.className = `${EXT_ID}-task-confirmation-actions`;
+    const cancelTask = document.createElement("button");
+    cancelTask.type = "button";
+    cancelTask.className = `${EXT_ID}-task-cancel`;
+    cancelTask.textContent = "取消";
+    cancelTask.addEventListener("click", () => {
+      hideTaskConfirmation();
+      setStatus("已取消，请选择需要学习的任务");
+    });
+    const confirmTask = document.createElement("button");
+    confirmTask.type = "button";
+    confirmTask.className = `${EXT_ID}-task-confirm`;
+    confirmTask.textContent = "确认开始";
+    confirmTask.addEventListener("click", () => {
+      if (state.pendingHomeTaskKey) startHomeTask(state.pendingHomeTaskKey);
+    });
+    taskConfirmationActions.append(cancelTask, confirmTask);
+    taskConfirmation.append(taskConfirmationTitle, taskConfirmationText, taskConfirmationActions);
+    tasks.append(taskHeader, taskList, taskConfirmation);
 
     const progress = document.createElement("div");
     progress.id = `${EXT_ID}-progress`;
@@ -1247,7 +1542,7 @@
     // Front face: the live panel. Back face: the settings. They share one card that flips.
     const front = document.createElement("div");
     front.className = `${EXT_ID}-face ${EXT_ID}-face-front`;
-    front.append(titleBar, actions, progress, summary, status);
+    front.append(titleBar, tasks, actions, progress, summary, status);
 
     const inner = document.createElement("div");
     inner.className = `${EXT_ID}-flip-inner`;
@@ -1310,6 +1605,12 @@
             complete: itemComplete(item),
             question: questionLikeItem(item)
           })),
+          homeTasks: homeTaskInfos().map((task) => ({
+            key: task.key,
+            title: task.title,
+            type: task.type,
+            complete: task.complete
+          })),
           pageLooksCatalog: pageLooksCatalog(),
           pageLooksContent: pageLooksContent(),
           pageLooksQuestion: pageLooksQuestion(),
@@ -1333,10 +1634,10 @@
     const stored = await storage.get();
     state.settings = { ...DEFAULTS, ...stored };
     state.runtime = { ...DEFAULT_RUNTIME, ...(stored.runtime || {}) };
-    // Panel visibility follows the page, not stored state: only the course directory page
-    // opens the panel; every other KME page starts minimized to the logo.
+    // The course directory and a signed-in home page with unfinished tasks open the panel.
+    // Player, quiz and unrelated pages start minimized so the helper stays out of the way.
     state.panelUrl = location.href;
-    state.panelOpen = isStudyCatalogPage();
+    state.panelOpen = shouldAutoOpenPanel();
     state.status = state.settings.running ? "已恢复自动学习" : "未启动";
 
     renderPanel();

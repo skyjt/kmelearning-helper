@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         KME 学习助手
 // @namespace    https://github.com/skyjt/kmelearning-helper
-// @version      2.6.0
+// @version      2.7.0
 // @description  自动按目录学习 KME 课程，并等待平台确认完成后继续下一门。
 // @author       skyjt
 // @license      MIT
@@ -24,7 +24,7 @@
   "use strict";
 
   const USERSCRIPT_ICON_URL = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMjggMTI4Ij4KICA8ZGVmcz4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0iYmciIHgxPSIxOCIgeDI9IjExMCIgeTE9IjE1IiB5Mj0iMTE2IiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+CiAgICAgIDxzdG9wIHN0b3AtY29sb3I9IiMyRDc2RkYiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIuNzIiIHN0b3AtY29sb3I9IiMyMUQzQjUiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjRkZCMjVFIi8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogICAgPGZpbHRlciBpZD0ic2hhZG93IiB4PSItMjAlIiB5PSItMjAlIiB3aWR0aD0iMTQwJSIgaGVpZ2h0PSIxNTAlIj4KICAgICAgPGZlRHJvcFNoYWRvdyBkeD0iMCIgZHk9IjgiIHN0ZERldmlhdGlvbj0iNiIgZmxvb2QtY29sb3I9IiMwODEyMjgiIGZsb29kLW9wYWNpdHk9Ii4yNSIvPgogICAgPC9maWx0ZXI+CiAgPC9kZWZzPgogIDxyZWN0IHg9IjEwIiB5PSIxMCIgd2lkdGg9IjEwOCIgaGVpZ2h0PSIxMDgiIHJ4PSIyNiIgZmlsbD0idXJsKCNiZykiIGZpbHRlcj0idXJsKCNzaGFkb3cpIi8+CiAgPGNpcmNsZSBjeD0iMjciIGN5PSIyNSIgcj0iMzAiIGZpbGw9IiNmZmYiIG9wYWNpdHk9Ii4xNSIvPgogIDxnIG9wYWNpdHk9Ii45NSI+CiAgICA8cmVjdCB4PSIzMCIgeT0iMzgiIHdpZHRoPSIzMSIgaGVpZ2h0PSI1NiIgcng9IjYiIGZpbGw9IiNmZmYiIHRyYW5zZm9ybT0icm90YXRlKC03IDQ1LjUgNjYpIi8+CiAgICA8cmVjdCB4PSI2NyIgeT0iMzgiIHdpZHRoPSIzMSIgaGVpZ2h0PSI1NiIgcng9IjYiIGZpbGw9IiNFQUY0RkYiIHRyYW5zZm9ybT0icm90YXRlKDcgODIuNSA2NikiLz4KICAgIDxyZWN0IHg9IjYyIiB5PSIzOCIgd2lkdGg9IjQiIGhlaWdodD0iNTgiIHJ4PSIyIiBmaWxsPSIjMjg3NUI5IiBvcGFjaXR5PSIuMzUiLz4KICAgIDxwYXRoIGQ9Ik03NCA2MnYxOWwxNy05LjV6IiBmaWxsPSIjMUU3MkYwIi8+CiAgICA8cGF0aCBkPSJNMzMgNTZsMTgtNE0zNSA3MWwxNy0zTTczIDU1bDE2IDQiIHN0cm9rZT0iIzM3N0VCRSIgc3Ryb2tlLXdpZHRoPSIzLjQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgb3BhY2l0eT0iLjI1Ii8+CiAgPC9nPgogIDxjaXJjbGUgY3g9Ijg4IiBjeT0iNDAiIHI9IjE4IiBmaWxsPSIjRkY2QTczIi8+CiAgPHBhdGggZD0iTTgwIDQwbDYgNiAxMi0xNSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8L3N2Zz4K";
-  const USERSCRIPT_STYLES = "#kme-learning-navigator {\n  position: fixed;\n  right: 16px;\n  bottom: 16px;\n  z-index: 2147483647;\n  color: var(--kme-ink);\n  font: 13px/1.45 -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;\n  --kme-accent: #246bfe;\n  --kme-accent-2: #21bfae;\n  --kme-danger: #e5484d;\n  --kme-ink: #1b2150;\n  --kme-muted: rgba(27, 31, 70, 0.56);\n  --kme-line: rgba(27, 31, 70, 0.1);\n  --kme-surface: rgba(255, 255, 255, 0.97);\n}\n\n#kme-learning-navigator * {\n  box-sizing: border-box;\n}\n\n.kme-learning-navigator-panel {\n  display: none;\n  width: 296px;\n  padding: 14px;\n  border: 1px solid var(--kme-line);\n  border-radius: 14px;\n  background: var(--kme-surface);\n  -webkit-backdrop-filter: blur(12px) saturate(1.4);\n  backdrop-filter: blur(12px) saturate(1.4);\n  box-shadow: 0 18px 48px rgba(20, 27, 70, 0.22), 0 2px 6px rgba(20, 27, 70, 0.08);\n  perspective: 1400px;\n}\n\n/* Flip card: the front face (live panel) and back face (settings) share one card that the\n   ⚙ button rotates between. Each face hides its own backface; the visible one alone is\n   interactive so the hidden face can't intercept clicks. */\n.kme-learning-navigator-flip-inner {\n  position: relative;\n  width: 100%;\n  transform-style: preserve-3d;\n  transition: transform 0.55s cubic-bezier(0.4, 0.15, 0.2, 1);\n}\n\n#kme-learning-navigator.flipped .kme-learning-navigator-flip-inner {\n  transform: rotateY(180deg);\n}\n\n.kme-learning-navigator-face {\n  width: 100%;\n  -webkit-backface-visibility: hidden;\n  backface-visibility: hidden;\n}\n\n.kme-learning-navigator-face-front {\n  position: relative;\n}\n\n.kme-learning-navigator-face-back {\n  position: absolute;\n  top: 0;\n  left: 0;\n  transform: rotateY(180deg);\n  pointer-events: none;\n}\n\n#kme-learning-navigator.flipped .kme-learning-navigator-face-front {\n  pointer-events: none;\n}\n\n#kme-learning-navigator.flipped .kme-learning-navigator-face-back {\n  pointer-events: auto;\n}\n\n.kme-learning-navigator-done {\n  padding: 6px 14px;\n  border: 1px solid var(--kme-line);\n  border-radius: 8px;\n  background: rgba(36, 107, 254, 0.08);\n  color: var(--kme-accent);\n  cursor: pointer;\n  font-weight: 600;\n  font-size: 12.5px;\n  transition: background 0.15s ease, transform 0.15s ease;\n}\n\n.kme-learning-navigator-done:hover {\n  background: rgba(36, 107, 254, 0.16);\n}\n\n.kme-learning-navigator-done:active {\n  transform: scale(0.96);\n}\n\n.kme-learning-navigator-settings-note {\n  margin-top: 12px;\n  padding-top: 11px;\n  border-top: 1px solid var(--kme-line);\n  color: var(--kme-muted);\n  font-size: 12px;\n  line-height: 1.5;\n}\n\n#kme-learning-navigator.open .kme-learning-navigator-panel {\n  display: block;\n  animation: kme-pop-in 0.2s cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n@keyframes kme-pop-in {\n  from { opacity: 0; transform: translateY(10px) scale(0.97); }\n  to { opacity: 1; transform: none; }\n}\n\n.kme-learning-navigator-titlebar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  margin-bottom: 12px;\n}\n\n.kme-learning-navigator-title {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  font-size: 14px;\n  font-weight: 700;\n  letter-spacing: 0.2px;\n}\n\n.kme-learning-navigator-title::before {\n  content: \"\";\n  width: 8px;\n  height: 8px;\n  border-radius: 50%;\n  background: linear-gradient(135deg, var(--kme-accent), var(--kme-accent-2));\n}\n\n.kme-learning-navigator-controls {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n}\n\n.kme-learning-navigator-minimize,\n.kme-learning-navigator-settings {\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  width: 26px;\n  height: 26px;\n  padding: 0;\n  border: 1px solid var(--kme-line);\n  border-radius: 8px;\n  background: rgba(27, 31, 70, 0.04);\n  color: var(--kme-muted);\n  cursor: pointer;\n  font: 600 16px/1 -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif;\n  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;\n}\n\n.kme-learning-navigator-minimize:hover,\n.kme-learning-navigator-settings:hover {\n  background: rgba(36, 107, 254, 0.1);\n  color: var(--kme-accent);\n}\n\n.kme-learning-navigator-minimize:active,\n.kme-learning-navigator-settings:active {\n  transform: scale(0.92);\n}\n\n.kme-learning-navigator-settings svg {\n  display: block;\n  pointer-events: none;\n}\n\n.kme-learning-navigator-actions {\n  display: grid;\n  grid-template-columns: 1fr auto;\n  gap: 8px;\n  margin-bottom: 12px;\n}\n\n.kme-learning-navigator-primary,\n.kme-learning-navigator-secondary {\n  height: 38px;\n  border-radius: 10px;\n  cursor: pointer;\n  font: inherit;\n  font-weight: 600;\n  transition: transform 0.12s ease, box-shadow 0.18s ease, background 0.18s ease,\n    border-color 0.18s ease, filter 0.18s ease;\n}\n\n.kme-learning-navigator-primary {\n  border: none;\n  color: #fff;\n  background: linear-gradient(135deg, var(--kme-accent), #3d82ff);\n  box-shadow: 0 6px 16px rgba(36, 107, 254, 0.34);\n}\n\n.kme-learning-navigator-primary:hover {\n  filter: brightness(1.05);\n  box-shadow: 0 8px 20px rgba(36, 107, 254, 0.42);\n}\n\n.kme-learning-navigator-primary:active {\n  transform: translateY(1px);\n}\n\n.kme-learning-navigator-primary.is-running {\n  background: linear-gradient(135deg, var(--kme-danger), #f0676b);\n  box-shadow: 0 6px 16px rgba(229, 72, 77, 0.34);\n}\n\n.kme-learning-navigator-secondary {\n  min-width: 80px;\n  padding: 0 14px;\n  border: 1px solid var(--kme-line);\n  background: #fff;\n  color: var(--kme-ink);\n}\n\n.kme-learning-navigator-secondary:hover {\n  border-color: rgba(36, 107, 254, 0.4);\n  color: var(--kme-accent);\n  background: rgba(36, 107, 254, 0.05);\n}\n\n.kme-learning-navigator-secondary:active {\n  transform: translateY(1px);\n}\n\n.kme-learning-navigator-progress {\n  margin-bottom: 12px;\n  padding: 11px 12px;\n  border: 1px solid rgba(36, 107, 254, 0.14);\n  border-radius: 12px;\n  background: linear-gradient(135deg, rgba(36, 107, 254, 0.08), rgba(33, 191, 174, 0.1));\n}\n\n.kme-learning-navigator-progress-label {\n  margin-bottom: 8px;\n  color: var(--kme-ink);\n  font-weight: 600;\n  font-size: 12.5px;\n}\n\n.kme-learning-navigator-progress-track {\n  height: 8px;\n  overflow: hidden;\n  border-radius: 999px;\n  background: rgba(27, 31, 70, 0.12);\n}\n\n.kme-learning-navigator-progress-fill {\n  width: 0%;\n  height: 100%;\n  border-radius: inherit;\n  background: linear-gradient(90deg, var(--kme-accent), var(--kme-accent-2));\n  transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.kme-learning-navigator-row {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  min-height: 32px;\n  gap: 12px;\n}\n\n/* Render the native checkboxes as compact toggle switches without touching the markup. */\n.kme-learning-navigator-row input[type=\"checkbox\"] {\n  appearance: none;\n  -webkit-appearance: none;\n  position: relative;\n  flex: none;\n  width: 38px;\n  height: 22px;\n  margin: 0;\n  border-radius: 999px;\n  background: #c9cee0;\n  cursor: pointer;\n  transition: background 0.2s ease;\n}\n\n.kme-learning-navigator-row input[type=\"checkbox\"]::after {\n  content: \"\";\n  position: absolute;\n  top: 2px;\n  left: 2px;\n  width: 18px;\n  height: 18px;\n  border-radius: 50%;\n  background: #fff;\n  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);\n  transition: transform 0.2s ease;\n}\n\n.kme-learning-navigator-row input[type=\"checkbox\"]:checked {\n  background: linear-gradient(135deg, var(--kme-accent), var(--kme-accent-2));\n}\n\n.kme-learning-navigator-row input[type=\"checkbox\"]:checked::after {\n  transform: translateX(16px);\n}\n\n.kme-learning-navigator-row input[type=\"checkbox\"]:focus-visible {\n  outline: 2px solid rgba(36, 107, 254, 0.5);\n  outline-offset: 2px;\n}\n\n.kme-learning-navigator-summary {\n  min-height: 18px;\n  margin-top: 12px;\n  padding-top: 11px;\n  border-top: 1px solid var(--kme-line);\n  color: var(--kme-muted);\n  font-size: 12px;\n  word-break: break-word;\n}\n\n.kme-learning-navigator-status {\n  display: flex;\n  align-items: flex-start;\n  gap: 7px;\n  margin-top: 9px;\n  color: var(--kme-ink);\n  opacity: 0.85;\n  font-size: 12px;\n  word-break: break-word;\n}\n\n.kme-learning-navigator-status::before {\n  content: \"\";\n  flex: none;\n  margin-top: 4px;\n  width: 7px;\n  height: 7px;\n  border-radius: 50%;\n  background: linear-gradient(135deg, var(--kme-accent), var(--kme-accent-2));\n}\n\n.kme-learning-navigator-logo-toggle {\n  position: relative;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  width: 52px;\n  height: 52px;\n  margin-left: auto;\n  padding: 0;\n  border: 1px solid var(--kme-line);\n  border-radius: 50%;\n  background: linear-gradient(135deg, #ffffff, #eaf3ff);\n  cursor: pointer;\n  box-shadow: 0 12px 28px rgba(20, 27, 70, 0.22);\n  transition: transform 0.18s ease, box-shadow 0.18s ease;\n}\n\n.kme-learning-navigator-logo-toggle:hover {\n  transform: translateY(-2px) scale(1.04);\n  box-shadow: 0 16px 34px rgba(20, 27, 70, 0.26);\n}\n\n.kme-learning-navigator-logo-toggle:active {\n  transform: translateY(0) scale(0.98);\n}\n\n.kme-learning-navigator-logo-toggle img {\n  width: 32px;\n  height: 32px;\n  display: block;\n  pointer-events: none;\n}\n\n#kme-learning-navigator.open .kme-learning-navigator-logo-toggle {\n  display: none;\n}\n\n.kme-learning-navigator-logo-dot {\n  position: absolute;\n  right: 6px;\n  bottom: 6px;\n  width: 12px;\n  height: 12px;\n  border: 2px solid #fff;\n  border-radius: 50%;\n  background: #9aa0b8;\n}\n\n.kme-learning-navigator-logo-dot.is-running {\n  background: var(--kme-accent-2);\n  animation: kme-pulse 1.8s ease-out infinite;\n}\n\n@keyframes kme-pulse {\n  0% { box-shadow: 0 0 0 0 rgba(33, 191, 174, 0.55); }\n  70% { box-shadow: 0 0 0 7px rgba(33, 191, 174, 0); }\n  100% { box-shadow: 0 0 0 0 rgba(33, 191, 174, 0); }\n}\n\n@media (prefers-color-scheme: dark) {\n  #kme-learning-navigator {\n    --kme-ink: #e7ebff;\n    --kme-muted: rgba(231, 235, 255, 0.6);\n    --kme-line: rgba(231, 235, 255, 0.14);\n    --kme-surface: rgba(28, 32, 54, 0.95);\n  }\n\n  .kme-learning-navigator-secondary {\n    background: rgba(255, 255, 255, 0.06);\n    color: var(--kme-ink);\n  }\n\n  .kme-learning-navigator-secondary:hover {\n    background: rgba(36, 107, 254, 0.18);\n  }\n\n  .kme-learning-navigator-minimize,\n  .kme-learning-navigator-settings {\n    background: rgba(255, 255, 255, 0.06);\n  }\n\n  .kme-learning-navigator-row input[type=\"checkbox\"] {\n    background: rgba(255, 255, 255, 0.18);\n  }\n\n  .kme-learning-navigator-progress-track {\n    background: rgba(255, 255, 255, 0.12);\n  }\n\n  .kme-learning-navigator-logo-toggle {\n    background: linear-gradient(135deg, #2a3050, #1d2238);\n  }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  #kme-learning-navigator *,\n  #kme-learning-navigator.open .kme-learning-navigator-panel {\n    animation: none !important;\n    transition: none !important;\n  }\n}\n";
+  const USERSCRIPT_STYLES = "#kme-learning-navigator {\n  position: fixed;\n  right: 16px;\n  bottom: 16px;\n  z-index: 2147483647;\n  color: var(--kme-ink);\n  font: 13px/1.45 -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;\n  --kme-accent: #246bfe;\n  --kme-accent-2: #21bfae;\n  --kme-danger: #e5484d;\n  --kme-ink: #1b2150;\n  --kme-muted: rgba(27, 31, 70, 0.56);\n  --kme-line: rgba(27, 31, 70, 0.1);\n  --kme-surface: rgba(255, 255, 255, 0.97);\n}\n\n#kme-learning-navigator * {\n  box-sizing: border-box;\n}\n\n.kme-learning-navigator-panel {\n  display: none;\n  width: 320px;\n  padding: 14px;\n  border: 1px solid var(--kme-line);\n  border-radius: 14px;\n  background: var(--kme-surface);\n  -webkit-backdrop-filter: blur(12px) saturate(1.4);\n  backdrop-filter: blur(12px) saturate(1.4);\n  box-shadow: 0 18px 48px rgba(20, 27, 70, 0.22), 0 2px 6px rgba(20, 27, 70, 0.08);\n  perspective: 1400px;\n}\n\n/* Flip card: the front face (live panel) and back face (settings) share one card that the\n   ⚙ button rotates between. Each face hides its own backface; the visible one alone is\n   interactive so the hidden face can't intercept clicks. */\n.kme-learning-navigator-flip-inner {\n  position: relative;\n  width: 100%;\n  transform-style: preserve-3d;\n  transition: transform 0.55s cubic-bezier(0.4, 0.15, 0.2, 1);\n}\n\n#kme-learning-navigator.flipped .kme-learning-navigator-flip-inner {\n  transform: rotateY(180deg);\n}\n\n.kme-learning-navigator-face {\n  width: 100%;\n  -webkit-backface-visibility: hidden;\n  backface-visibility: hidden;\n}\n\n.kme-learning-navigator-face-front {\n  position: relative;\n}\n\n.kme-learning-navigator-face-back {\n  position: absolute;\n  top: 0;\n  left: 0;\n  transform: rotateY(180deg);\n  pointer-events: none;\n}\n\n#kme-learning-navigator.flipped .kme-learning-navigator-face-front {\n  pointer-events: none;\n}\n\n#kme-learning-navigator.flipped .kme-learning-navigator-face-back {\n  pointer-events: auto;\n}\n\n.kme-learning-navigator-done {\n  padding: 6px 14px;\n  border: 1px solid var(--kme-line);\n  border-radius: 8px;\n  background: rgba(36, 107, 254, 0.08);\n  color: var(--kme-accent);\n  cursor: pointer;\n  font-weight: 600;\n  font-size: 12.5px;\n  transition: background 0.15s ease, transform 0.15s ease;\n}\n\n.kme-learning-navigator-done:hover {\n  background: rgba(36, 107, 254, 0.16);\n}\n\n.kme-learning-navigator-done:active {\n  transform: scale(0.96);\n}\n\n.kme-learning-navigator-settings-note {\n  margin-top: 12px;\n  padding-top: 11px;\n  border-top: 1px solid var(--kme-line);\n  color: var(--kme-muted);\n  font-size: 12px;\n  line-height: 1.5;\n}\n\n#kme-learning-navigator.open .kme-learning-navigator-panel {\n  display: block;\n  animation: kme-pop-in 0.2s cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n@keyframes kme-pop-in {\n  from { opacity: 0; transform: translateY(10px) scale(0.97); }\n  to { opacity: 1; transform: none; }\n}\n\n.kme-learning-navigator-titlebar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  margin-bottom: 12px;\n}\n\n.kme-learning-navigator-title {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  font-size: 14px;\n  font-weight: 700;\n  letter-spacing: 0.2px;\n}\n\n.kme-learning-navigator-title::before {\n  content: \"\";\n  width: 8px;\n  height: 8px;\n  border-radius: 50%;\n  background: linear-gradient(135deg, var(--kme-accent), var(--kme-accent-2));\n}\n\n.kme-learning-navigator-controls {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n}\n\n.kme-learning-navigator-minimize,\n.kme-learning-navigator-settings {\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  width: 26px;\n  height: 26px;\n  padding: 0;\n  border: 1px solid var(--kme-line);\n  border-radius: 8px;\n  background: rgba(27, 31, 70, 0.04);\n  color: var(--kme-muted);\n  cursor: pointer;\n  font: 600 16px/1 -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif;\n  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;\n}\n\n.kme-learning-navigator-minimize:hover,\n.kme-learning-navigator-settings:hover {\n  background: rgba(36, 107, 254, 0.1);\n  color: var(--kme-accent);\n}\n\n.kme-learning-navigator-minimize:active,\n.kme-learning-navigator-settings:active {\n  transform: scale(0.92);\n}\n\n.kme-learning-navigator-settings svg {\n  display: block;\n  pointer-events: none;\n}\n\n.kme-learning-navigator-actions {\n  display: grid;\n  grid-template-columns: 1fr auto;\n  gap: 8px;\n  margin-bottom: 12px;\n}\n\n.kme-learning-navigator-tasks {\n  margin-bottom: 12px;\n  padding: 11px;\n  border: 1px solid rgba(36, 107, 254, 0.14);\n  border-radius: 12px;\n  background: rgba(36, 107, 254, 0.035);\n}\n\n.kme-learning-navigator-task-header {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  margin-bottom: 8px;\n  color: var(--kme-ink);\n  font-size: 12px;\n  font-weight: 700;\n}\n\n.kme-learning-navigator-task-header span:last-child {\n  color: var(--kme-muted);\n  font-weight: 500;\n}\n\n.kme-learning-navigator-task-list {\n  display: flex;\n  max-height: 210px;\n  flex-direction: column;\n  gap: 7px;\n  overflow-y: auto;\n  overscroll-behavior: contain;\n}\n\n.kme-learning-navigator-task-item {\n  display: flex;\n  width: 100%;\n  min-width: 0;\n  align-items: center;\n  justify-content: space-between;\n  gap: 9px;\n  padding: 9px 10px;\n  border: 1px solid var(--kme-line);\n  border-radius: 9px;\n  background: #fff;\n  color: var(--kme-ink);\n  cursor: pointer;\n  font: inherit;\n  text-align: left;\n  transition: border-color 0.16s ease, background 0.16s ease, transform 0.12s ease;\n}\n\n.kme-learning-navigator-task-item:hover {\n  border-color: rgba(36, 107, 254, 0.36);\n  background: rgba(36, 107, 254, 0.06);\n}\n\n.kme-learning-navigator-task-item:active {\n  transform: scale(0.985);\n}\n\n.kme-learning-navigator-task-item:disabled {\n  opacity: 0.52;\n  cursor: not-allowed;\n}\n\n.kme-learning-navigator-task-title {\n  min-width: 0;\n  overflow: hidden;\n  color: var(--kme-ink);\n  font-weight: 600;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.kme-learning-navigator-task-type {\n  flex: none;\n  padding: 2px 6px;\n  border-radius: 999px;\n  background: rgba(36, 107, 254, 0.09);\n  color: var(--kme-accent);\n  font-size: 11px;\n  line-height: 1.4;\n}\n\n.kme-learning-navigator-task-empty {\n  padding: 10px 4px 4px;\n  color: var(--kme-muted);\n  font-size: 12px;\n  text-align: center;\n}\n\n.kme-learning-navigator-task-confirmation {\n  padding: 3px 1px 0;\n}\n\n.kme-learning-navigator-task-confirmation-title {\n  color: var(--kme-ink);\n  font-weight: 700;\n  line-height: 1.5;\n  word-break: break-word;\n}\n\n.kme-learning-navigator-task-confirmation p {\n  margin: 7px 0 10px;\n  color: var(--kme-muted);\n  font-size: 12px;\n  line-height: 1.5;\n}\n\n.kme-learning-navigator-task-confirmation-actions {\n  display: grid;\n  grid-template-columns: 1fr 1.35fr;\n  gap: 8px;\n}\n\n.kme-learning-navigator-task-cancel,\n.kme-learning-navigator-task-confirm {\n  height: 32px;\n  border-radius: 8px;\n  cursor: pointer;\n  font: inherit;\n  font-weight: 600;\n}\n\n.kme-learning-navigator-task-cancel {\n  border: 1px solid var(--kme-line);\n  background: #fff;\n  color: var(--kme-muted);\n}\n\n.kme-learning-navigator-task-confirm {\n  border: 0;\n  background: linear-gradient(135deg, var(--kme-accent), #3d82ff);\n  color: #fff;\n  box-shadow: 0 5px 12px rgba(36, 107, 254, 0.24);\n}\n\n.kme-learning-navigator-task-cancel:hover,\n.kme-learning-navigator-task-confirm:hover {\n  filter: brightness(1.04);\n}\n\n.kme-learning-navigator-primary,\n.kme-learning-navigator-secondary {\n  height: 38px;\n  border-radius: 10px;\n  cursor: pointer;\n  font: inherit;\n  font-weight: 600;\n  transition: transform 0.12s ease, box-shadow 0.18s ease, background 0.18s ease,\n    border-color 0.18s ease, filter 0.18s ease;\n}\n\n.kme-learning-navigator-primary {\n  border: none;\n  color: #fff;\n  background: linear-gradient(135deg, var(--kme-accent), #3d82ff);\n  box-shadow: 0 6px 16px rgba(36, 107, 254, 0.34);\n}\n\n.kme-learning-navigator-primary:hover {\n  filter: brightness(1.05);\n  box-shadow: 0 8px 20px rgba(36, 107, 254, 0.42);\n}\n\n.kme-learning-navigator-primary:active {\n  transform: translateY(1px);\n}\n\n.kme-learning-navigator-primary.is-running {\n  background: linear-gradient(135deg, var(--kme-danger), #f0676b);\n  box-shadow: 0 6px 16px rgba(229, 72, 77, 0.34);\n}\n\n.kme-learning-navigator-secondary {\n  min-width: 80px;\n  padding: 0 14px;\n  border: 1px solid var(--kme-line);\n  background: #fff;\n  color: var(--kme-ink);\n}\n\n.kme-learning-navigator-secondary:hover {\n  border-color: rgba(36, 107, 254, 0.4);\n  color: var(--kme-accent);\n  background: rgba(36, 107, 254, 0.05);\n}\n\n.kme-learning-navigator-secondary:active {\n  transform: translateY(1px);\n}\n\n.kme-learning-navigator-progress {\n  margin-bottom: 12px;\n  padding: 11px 12px;\n  border: 1px solid rgba(36, 107, 254, 0.14);\n  border-radius: 12px;\n  background: linear-gradient(135deg, rgba(36, 107, 254, 0.08), rgba(33, 191, 174, 0.1));\n}\n\n.kme-learning-navigator-progress-label {\n  margin-bottom: 8px;\n  color: var(--kme-ink);\n  font-weight: 600;\n  font-size: 12.5px;\n}\n\n.kme-learning-navigator-progress-track {\n  height: 8px;\n  overflow: hidden;\n  border-radius: 999px;\n  background: rgba(27, 31, 70, 0.12);\n}\n\n.kme-learning-navigator-progress-fill {\n  width: 0%;\n  height: 100%;\n  border-radius: inherit;\n  background: linear-gradient(90deg, var(--kme-accent), var(--kme-accent-2));\n  transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.kme-learning-navigator-row {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  min-height: 32px;\n  gap: 12px;\n}\n\n/* Render the native checkboxes as compact toggle switches without touching the markup. */\n.kme-learning-navigator-row input[type=\"checkbox\"] {\n  appearance: none;\n  -webkit-appearance: none;\n  position: relative;\n  flex: none;\n  width: 38px;\n  height: 22px;\n  margin: 0;\n  border-radius: 999px;\n  background: #c9cee0;\n  cursor: pointer;\n  transition: background 0.2s ease;\n}\n\n.kme-learning-navigator-row input[type=\"checkbox\"]::after {\n  content: \"\";\n  position: absolute;\n  top: 2px;\n  left: 2px;\n  width: 18px;\n  height: 18px;\n  border-radius: 50%;\n  background: #fff;\n  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);\n  transition: transform 0.2s ease;\n}\n\n.kme-learning-navigator-row input[type=\"checkbox\"]:checked {\n  background: linear-gradient(135deg, var(--kme-accent), var(--kme-accent-2));\n}\n\n.kme-learning-navigator-row input[type=\"checkbox\"]:checked::after {\n  transform: translateX(16px);\n}\n\n.kme-learning-navigator-row input[type=\"checkbox\"]:focus-visible {\n  outline: 2px solid rgba(36, 107, 254, 0.5);\n  outline-offset: 2px;\n}\n\n.kme-learning-navigator-summary {\n  min-height: 18px;\n  margin-top: 12px;\n  padding-top: 11px;\n  border-top: 1px solid var(--kme-line);\n  color: var(--kme-muted);\n  font-size: 12px;\n  word-break: break-word;\n}\n\n.kme-learning-navigator-status {\n  display: flex;\n  align-items: flex-start;\n  gap: 7px;\n  margin-top: 9px;\n  color: var(--kme-ink);\n  opacity: 0.85;\n  font-size: 12px;\n  word-break: break-word;\n}\n\n.kme-learning-navigator-status::before {\n  content: \"\";\n  flex: none;\n  margin-top: 4px;\n  width: 7px;\n  height: 7px;\n  border-radius: 50%;\n  background: linear-gradient(135deg, var(--kme-accent), var(--kme-accent-2));\n}\n\n.kme-learning-navigator-logo-toggle {\n  position: relative;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  width: 52px;\n  height: 52px;\n  margin-left: auto;\n  padding: 0;\n  border: 1px solid var(--kme-line);\n  border-radius: 50%;\n  background: linear-gradient(135deg, #ffffff, #eaf3ff);\n  cursor: pointer;\n  box-shadow: 0 12px 28px rgba(20, 27, 70, 0.22);\n  transition: transform 0.18s ease, box-shadow 0.18s ease;\n}\n\n.kme-learning-navigator-logo-toggle:hover {\n  transform: translateY(-2px) scale(1.04);\n  box-shadow: 0 16px 34px rgba(20, 27, 70, 0.26);\n}\n\n.kme-learning-navigator-logo-toggle:active {\n  transform: translateY(0) scale(0.98);\n}\n\n.kme-learning-navigator-logo-toggle img {\n  width: 32px;\n  height: 32px;\n  display: block;\n  pointer-events: none;\n}\n\n#kme-learning-navigator.open .kme-learning-navigator-logo-toggle {\n  display: none;\n}\n\n.kme-learning-navigator-logo-dot {\n  position: absolute;\n  right: 6px;\n  bottom: 6px;\n  width: 12px;\n  height: 12px;\n  border: 2px solid #fff;\n  border-radius: 50%;\n  background: #9aa0b8;\n}\n\n.kme-learning-navigator-logo-dot.is-running {\n  background: var(--kme-accent-2);\n  animation: kme-pulse 1.8s ease-out infinite;\n}\n\n@keyframes kme-pulse {\n  0% { box-shadow: 0 0 0 0 rgba(33, 191, 174, 0.55); }\n  70% { box-shadow: 0 0 0 7px rgba(33, 191, 174, 0); }\n  100% { box-shadow: 0 0 0 0 rgba(33, 191, 174, 0); }\n}\n\n@media (prefers-color-scheme: dark) {\n  #kme-learning-navigator {\n    --kme-ink: #e7ebff;\n    --kme-muted: rgba(231, 235, 255, 0.6);\n    --kme-line: rgba(231, 235, 255, 0.14);\n    --kme-surface: rgba(28, 32, 54, 0.95);\n  }\n\n  .kme-learning-navigator-secondary {\n    background: rgba(255, 255, 255, 0.06);\n    color: var(--kme-ink);\n  }\n\n  .kme-learning-navigator-task-item,\n  .kme-learning-navigator-task-cancel {\n    background: rgba(255, 255, 255, 0.06);\n    color: var(--kme-ink);\n  }\n\n  .kme-learning-navigator-task-item:hover {\n    background: rgba(36, 107, 254, 0.18);\n  }\n\n  .kme-learning-navigator-secondary:hover {\n    background: rgba(36, 107, 254, 0.18);\n  }\n\n  .kme-learning-navigator-minimize,\n  .kme-learning-navigator-settings {\n    background: rgba(255, 255, 255, 0.06);\n  }\n\n  .kme-learning-navigator-row input[type=\"checkbox\"] {\n    background: rgba(255, 255, 255, 0.18);\n  }\n\n  .kme-learning-navigator-progress-track {\n    background: rgba(255, 255, 255, 0.12);\n  }\n\n  .kme-learning-navigator-logo-toggle {\n    background: linear-gradient(135deg, #2a3050, #1d2238);\n  }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  #kme-learning-navigator *,\n  #kme-learning-navigator.open .kme-learning-navigator-panel {\n    animation: none !important;\n    transition: none !important;\n  }\n}\n";
 
   // Keep the shared content script unchanged by presenting the small callback-style subset
   // of the Chrome APIs it uses. Tampermonkey owns the underlying persistent storage.
@@ -128,6 +128,9 @@
     panelTimer: 0,
     flipped: false,
     flipTimer: 0,
+    homeTaskSignature: "",
+    pendingHomeTaskKey: "",
+    taskPanelAutoOpenedUrl: "",
     rootEl: null
   };
 
@@ -496,6 +499,75 @@
       });
     return dedupeElements(candidates);
   });
+
+  function isHomePage() {
+    return /\/home\/index\/?$/.test(location.pathname);
+  }
+
+  // The signed-in home page renders current work under the "我的任务" heading. The task
+  // cards do not expose links or data attributes, so scope the scan to that section and use
+  // the platform's task icon plus its clickable card as the stable DOM contract.
+  function homeTaskSection() {
+    if (!isHomePage()) return null;
+    const heading = [...document.querySelectorAll("span, h1, h2, h3, h4")]
+      .find((el) => visible(el) && textOf(el) === "我的任务");
+    if (!heading) return null;
+
+    let current = heading;
+    for (let depth = 0; current && depth < 6; depth += 1, current = current.parentElement) {
+      const sibling = current.nextElementSibling;
+      if (!sibling) continue;
+      if (sibling.querySelector("img[src*='task_']")) return sibling;
+    }
+    return null;
+  }
+
+  const homeTaskCards = memoScan(() => {
+    const section = homeTaskSection();
+    if (!section) return [];
+
+    const iconCards = [...section.querySelectorAll("img[src*='task_']")]
+      .map((icon) => icon.closest("[class*='cursor-pointer'], button, a, [role='button']") || icon.parentElement)
+      .filter(Boolean);
+    const fallbackCards = iconCards.length ? [] : [...section.querySelectorAll("[class*='cursor-pointer'], button, a, [role='button']")];
+    return dedupeElements([...iconCards, ...fallbackCards]
+      .filter(visible)
+      .filter((el) => meaningfulRowText(textOf(el))));
+  });
+
+  function taskCardTitle(card) {
+    const titleEl = [...card.querySelectorAll("p[title], [data-title], p, h3, h4")]
+      .find((el) => {
+        const text = normalize(el.getAttribute("title") || el.getAttribute("data-title") || textOf(el));
+        return text.length >= 2 && text.length <= 160;
+      });
+    const title = normalize(titleEl?.getAttribute("title") || titleEl?.getAttribute("data-title") || textOf(titleEl));
+    return title || titleFromText(textOf(card));
+  }
+
+  function homeTaskInfos() {
+    const occurrences = new Map();
+    return homeTaskCards().map((card) => {
+      const title = taskCardTitle(card);
+      const compactTitle = compact(title);
+      const occurrence = occurrences.get(compactTitle) || 0;
+      occurrences.set(compactTitle, occurrence + 1);
+      const type = [...card.querySelectorAll("span, small")]
+        .map((el) => textOf(el))
+        .find((text) => text && text !== title && text.length <= 16) || "学习任务";
+      return {
+        card,
+        title,
+        type,
+        key: `${compactTitle}::${occurrence}`,
+        complete: itemComplete(card)
+      };
+    }).filter((task) => task.title);
+  }
+
+  function unfinishedHomeTasks() {
+    return homeTaskInfos().filter((task) => !task.complete);
+  }
 
   function pageLooksCatalog() {
     const rows = catalogRows();
@@ -990,6 +1062,11 @@
         await handleCatalog();
       } else if (pageLooksContent()) {
         await handleContent();
+      } else if (isHomePage()) {
+        state.settings.running = false;
+        await storage.set({ running: false });
+        setStatus("请选择一个未完成任务后开始学习");
+        syncRunningUI();
       } else {
         const started = await clickStartControl();
         if (!started) setStatus(`等待学习页面加载：${reason}`);
@@ -1017,14 +1094,16 @@
     if (mutations && mutations.length && !hasExternalMutation(mutations)) return;
     invalidateScans();
     window.clearTimeout(state.mutationTimer);
-    state.mutationTimer = window.setTimeout(() => tick("dom-change"), 500);
+    state.mutationTimer = window.setTimeout(() => {
+      updatePanelSummary();
+      tick("dom-change");
+    }, 500);
   }
 
-  async function start() {
-    const progress = pageLooksCatalog() ? catalogProgressFromRows() : currentLearningProgress();
+  async function beginLearningSession({ catalogUrl, progress, status }) {
     await runtimePatch({
-      catalogUrl: pageLooksCatalog() ? location.href : state.runtime.catalogUrl,
-      currentCourseTitle: state.runtime.currentCourseTitle || "",
+      catalogUrl,
+      currentCourseTitle: "",
       completedCourseTitles: [],
       skippedTitles: [],
       lastTargetKey: "",
@@ -1034,15 +1113,59 @@
       lastCourseRequiredSeconds: 0,
       lastCourseLearnedSeconds: 0,
       lastCourseTimeCheckedAt: 0,
-      catalogTotal: progress.total ? progress.total : Number(state.runtime.catalogTotal || 0),
-      catalogCompleted: progress.total ? progress.completed : Number(state.runtime.catalogCompleted || 0),
-      catalogProgressAt: progress.total ? now() : Number(state.runtime.catalogProgressAt || 0)
+      catalogTotal: Number(progress.total || 0),
+      catalogCompleted: Number(progress.completed || 0),
+      catalogProgressAt: progress.total ? now() : 0
     });
     state.settings.running = true;
     await storage.set({ running: true, runtime: state.runtime });
-    setStatus("已启动，开始寻找第一个未完成课程");
+    setStatus(status);
     syncRunningUI();
+  }
+
+  async function start() {
+    const homeTasks = unfinishedHomeTasks();
+    if (isHomePage()) {
+      setStatus(homeTasks.length ? "请从未完成任务列表中选择一项" : "当前没有检测到未完成任务");
+      updateHomeTaskDisplay(true);
+      return;
+    }
+
+    const onCatalog = pageLooksCatalog();
+    const progress = onCatalog ? catalogProgressFromRows() : currentLearningProgress();
+    await beginLearningSession({
+      catalogUrl: onCatalog ? location.href : state.runtime.catalogUrl,
+      progress: progress.total ? progress : {
+        total: Number(state.runtime.catalogTotal || 0),
+        completed: Number(state.runtime.catalogCompleted || 0)
+      },
+      status: "已启动，开始寻找第一个未完成课程"
+    });
     tick("start");
+  }
+
+  async function startHomeTask(taskKey) {
+    invalidateScans();
+    const task = unfinishedHomeTasks().find((item) => item.key === taskKey);
+    if (!task) {
+      hideTaskConfirmation();
+      updateHomeTaskDisplay(true);
+      setStatus("任务列表已更新，请重新选择");
+      return;
+    }
+
+    hideTaskConfirmation();
+    await beginLearningSession({
+      catalogUrl: "",
+      progress: { total: 0, completed: 0 },
+      status: `准备进入任务：${task.title}`
+    });
+    if (!clickElement(task.card, `进入任务：${task.title}`)) {
+      state.settings.running = false;
+      await storage.set({ running: false });
+      setStatus("任务卡片暂时无法点击，请刷新页面后重试");
+      syncRunningUI();
+    }
   }
 
   async function stop() {
@@ -1052,7 +1175,95 @@
     syncRunningUI();
   }
 
+  function hideTaskConfirmation() {
+    state.pendingHomeTaskKey = "";
+    const confirmation = document.querySelector(`#${EXT_ID}-task-confirmation`);
+    const list = document.querySelector(`#${EXT_ID}-task-list`);
+    if (confirmation) confirmation.hidden = true;
+    if (list) list.hidden = false;
+  }
+
+  function showTaskConfirmation(taskKey) {
+    const task = unfinishedHomeTasks().find((item) => item.key === taskKey);
+    if (!task) {
+      updateHomeTaskDisplay(true);
+      setStatus("任务列表已更新，请重新选择");
+      return;
+    }
+
+    state.pendingHomeTaskKey = task.key;
+    const confirmation = document.querySelector(`#${EXT_ID}-task-confirmation`);
+    const title = document.querySelector(`#${EXT_ID}-task-confirmation-title`);
+    const list = document.querySelector(`#${EXT_ID}-task-list`);
+    if (!confirmation || !title) return;
+    title.textContent = `开始自动学习“${task.title}”吗？`;
+    confirmation.hidden = false;
+    if (list) list.hidden = true;
+    setStatus("等待确认后进入任务");
+  }
+
+  function updateHomeTaskDisplay(force = false) {
+    const container = document.querySelector(`#${EXT_ID}-tasks`);
+    const list = document.querySelector(`#${EXT_ID}-task-list`);
+    const count = document.querySelector(`#${EXT_ID}-task-count`);
+    if (!container || !list || !count) return;
+
+    if (!isHomePage()) {
+      container.hidden = true;
+      state.homeTaskSignature = "";
+      hideTaskConfirmation();
+      return;
+    }
+
+    const tasks = unfinishedHomeTasks();
+    container.hidden = false;
+    count.textContent = `未完成任务 ${tasks.length}`;
+
+    const signature = tasks.map((task) => `${task.key}|${task.title}|${task.type}`).join("\n");
+    if (force || signature !== state.homeTaskSignature) {
+      state.homeTaskSignature = signature;
+      list.replaceChildren();
+
+      if (!tasks.length) {
+        const empty = document.createElement("div");
+        empty.className = `${EXT_ID}-task-empty`;
+        empty.textContent = "当前没有检测到未完成任务";
+        list.append(empty);
+        hideTaskConfirmation();
+      } else {
+        tasks.forEach((task) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = `${EXT_ID}-task-item`;
+          button.dataset.taskKey = task.key;
+          button.disabled = state.settings.running;
+
+          const taskTitle = document.createElement("span");
+          taskTitle.className = `${EXT_ID}-task-title`;
+          taskTitle.textContent = task.title;
+          const taskType = document.createElement("span");
+          taskType.className = `${EXT_ID}-task-type`;
+          taskType.textContent = task.type;
+          button.append(taskTitle, taskType);
+          button.addEventListener("click", () => showTaskConfirmation(task.key));
+          list.append(button);
+        });
+      }
+    }
+
+    if (tasks.length && state.taskPanelAutoOpenedUrl !== location.href) {
+      state.taskPanelAutoOpenedUrl = location.href;
+      if (!state.panelOpen) {
+        state.panelOpen = true;
+        state.rootEl?.classList.add("open");
+      }
+    }
+
+    syncRunningUI();
+  }
+
   function updatePanelSummary() {
+    updateHomeTaskDisplay();
     // Panel content is display:none while minimized; skip the expensive DOM scans until the
     // user restores it (restore() calls this again to refresh).
     if (!state.panelOpen) return;
@@ -1063,6 +1274,7 @@
     const contentCount = contentItems().length;
     const video = primaryVideo();
     const parts = [];
+    if (isHomePage()) parts.push(`未完成任务 ${unfinishedHomeTasks().length}`);
     if (catalogCount) parts.push(`目录 ${catalogCount}`);
     if (contentCount) parts.push(`内容 ${contentCount}`);
     if (video && Number.isFinite(video.duration)) {
@@ -1101,10 +1313,17 @@
     const primary = document.querySelector(`.${EXT_ID}-primary`);
     if (primary) {
       primary.classList.toggle("is-running", state.settings.running);
-      primary.textContent = state.settings.running ? "停止自动学习" : "开始自动学习";
+      primary.textContent = state.settings.running
+        ? "停止自动学习"
+        : (isHomePage()
+          ? (unfinishedHomeTasks().length ? "选择下方任务" : "检查任务")
+          : "开始自动学习");
     }
     const dot = document.querySelector(`.${EXT_ID}-logo-dot`);
     if (dot) dot.classList.toggle("is-running", state.settings.running);
+    document.querySelectorAll(`.${EXT_ID}-task-item`).forEach((button) => {
+      button.disabled = state.settings.running;
+    });
   }
 
   // The floating panel should only auto-expand on the training "study" page — the real
@@ -1115,6 +1334,15 @@
     return /\/home\/training\/study(?:\/|$)/.test(location.pathname);
   }
 
+  function shouldAutoOpenPanel() {
+    if (isStudyCatalogPage()) return true;
+    if (isHomePage() && unfinishedHomeTasks().length) {
+      state.taskPanelAutoOpenedUrl = location.href;
+      return true;
+    }
+    return false;
+  }
+
   // Re-apply that per-page default whenever the URL changes. The site is a single-page app,
   // so navigating from the directory into a course (or back) does not reload the content
   // script; without this the panel would keep whatever state it had. We only act on an actual
@@ -1122,12 +1350,19 @@
   function syncPanelForUrl() {
     if (state.panelUrl === location.href) return;
     state.panelUrl = location.href;
-    const shouldOpen = isStudyCatalogPage();
-    if (shouldOpen === state.panelOpen) return;
+    state.homeTaskSignature = "";
+    state.taskPanelAutoOpenedUrl = "";
+    hideTaskConfirmation();
+    const shouldOpen = shouldAutoOpenPanel();
     state.panelOpen = shouldOpen;
     if (state.rootEl) state.rootEl.classList.toggle("open", shouldOpen);
-    if (shouldOpen) updatePanelSummary();
-    else resetFlip();
+    if (shouldOpen) {
+      updateHomeTaskDisplay(true);
+      updatePanelSummary();
+    } else {
+      updateHomeTaskDisplay(true);
+      resetFlip();
+    }
   }
 
   // One settings switch on the card's back face: a labelled toggle that writes straight to
@@ -1283,11 +1518,71 @@
     scan.type = "button";
     scan.className = `${EXT_ID}-secondary`;
     scan.textContent = "立即检查";
-    scan.addEventListener("click", () => tick("manual"));
+    scan.addEventListener("click", () => {
+      invalidateScans();
+      updateHomeTaskDisplay(true);
+      if (isHomePage() && !state.settings.running) {
+        const taskCount = unfinishedHomeTasks().length;
+        setStatus(taskCount ? `检测到 ${taskCount} 个未完成任务` : "当前没有检测到未完成任务");
+      } else {
+        tick("manual");
+      }
+    });
 
     const actions = document.createElement("div");
     actions.className = `${EXT_ID}-actions`;
     actions.append(primary, scan);
+
+    const tasks = document.createElement("section");
+    tasks.id = `${EXT_ID}-tasks`;
+    tasks.className = `${EXT_ID}-tasks`;
+    tasks.hidden = true;
+
+    const taskHeader = document.createElement("div");
+    taskHeader.className = `${EXT_ID}-task-header`;
+    const taskCount = document.createElement("span");
+    taskCount.id = `${EXT_ID}-task-count`;
+    taskCount.textContent = "未完成任务 0";
+    const taskHint = document.createElement("span");
+    taskHint.textContent = "点击选择";
+    taskHeader.append(taskCount, taskHint);
+
+    const taskList = document.createElement("div");
+    taskList.id = `${EXT_ID}-task-list`;
+    taskList.className = `${EXT_ID}-task-list`;
+
+    const taskConfirmation = document.createElement("div");
+    taskConfirmation.id = `${EXT_ID}-task-confirmation`;
+    taskConfirmation.className = `${EXT_ID}-task-confirmation`;
+    taskConfirmation.setAttribute("role", "dialog");
+    taskConfirmation.setAttribute("aria-label", "确认自动学习任务");
+    taskConfirmation.hidden = true;
+
+    const taskConfirmationTitle = document.createElement("div");
+    taskConfirmationTitle.id = `${EXT_ID}-task-confirmation-title`;
+    taskConfirmationTitle.className = `${EXT_ID}-task-confirmation-title`;
+    const taskConfirmationText = document.createElement("p");
+    taskConfirmationText.textContent = "确认后将进入该任务，并按顺序学习其中未完成的课程。";
+    const taskConfirmationActions = document.createElement("div");
+    taskConfirmationActions.className = `${EXT_ID}-task-confirmation-actions`;
+    const cancelTask = document.createElement("button");
+    cancelTask.type = "button";
+    cancelTask.className = `${EXT_ID}-task-cancel`;
+    cancelTask.textContent = "取消";
+    cancelTask.addEventListener("click", () => {
+      hideTaskConfirmation();
+      setStatus("已取消，请选择需要学习的任务");
+    });
+    const confirmTask = document.createElement("button");
+    confirmTask.type = "button";
+    confirmTask.className = `${EXT_ID}-task-confirm`;
+    confirmTask.textContent = "确认开始";
+    confirmTask.addEventListener("click", () => {
+      if (state.pendingHomeTaskKey) startHomeTask(state.pendingHomeTaskKey);
+    });
+    taskConfirmationActions.append(cancelTask, confirmTask);
+    taskConfirmation.append(taskConfirmationTitle, taskConfirmationText, taskConfirmationActions);
+    tasks.append(taskHeader, taskList, taskConfirmation);
 
     const progress = document.createElement("div");
     progress.id = `${EXT_ID}-progress`;
@@ -1318,7 +1613,7 @@
     // Front face: the live panel. Back face: the settings. They share one card that flips.
     const front = document.createElement("div");
     front.className = `${EXT_ID}-face ${EXT_ID}-face-front`;
-    front.append(titleBar, actions, progress, summary, status);
+    front.append(titleBar, tasks, actions, progress, summary, status);
 
     const inner = document.createElement("div");
     inner.className = `${EXT_ID}-flip-inner`;
@@ -1381,6 +1676,12 @@
             complete: itemComplete(item),
             question: questionLikeItem(item)
           })),
+          homeTasks: homeTaskInfos().map((task) => ({
+            key: task.key,
+            title: task.title,
+            type: task.type,
+            complete: task.complete
+          })),
           pageLooksCatalog: pageLooksCatalog(),
           pageLooksContent: pageLooksContent(),
           pageLooksQuestion: pageLooksQuestion(),
@@ -1404,10 +1705,10 @@
     const stored = await storage.get();
     state.settings = { ...DEFAULTS, ...stored };
     state.runtime = { ...DEFAULT_RUNTIME, ...(stored.runtime || {}) };
-    // Panel visibility follows the page, not stored state: only the course directory page
-    // opens the panel; every other KME page starts minimized to the logo.
+    // The course directory and a signed-in home page with unfinished tasks open the panel.
+    // Player, quiz and unrelated pages start minimized so the helper stays out of the way.
     state.panelUrl = location.href;
-    state.panelOpen = isStudyCatalogPage();
+    state.panelOpen = shouldAutoOpenPanel();
     state.status = state.settings.running ? "已恢复自动学习" : "未启动";
 
     renderPanel();
