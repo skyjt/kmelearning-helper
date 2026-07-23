@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         KME 学习助手
 // @namespace    https://github.com/skyjt/kmelearning-helper
-// @version      2.9.0
+// @version      2.9.1
 // @description  自动学习 KME 课程，并通过用户配置的大模型完成可见测验和后续课程。
 // @author       skyjt
 // @license      MIT
@@ -910,7 +910,8 @@
         return Number(scoreMatch[1]) >= Number(passMatch[1]) ? "passed" : "failed";
       }
       if (/(?:测验|考试|答题).{0,12}(?:通过|合格)/.test(pageText)) return "passed";
-      return "failed";
+      // 平台会先渲染“再考一次”，随后才补上成绩和通过提示；此时继续等待完整结果。
+      return "pending";
     }
     return "pending";
   }

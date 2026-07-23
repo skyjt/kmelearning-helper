@@ -404,8 +404,12 @@ const quizHtml = String.raw`<!doctype html>
     window.__mockSubmittedSelections = [...document.querySelectorAll("[data-question]")]
       .map((group) => [...group.querySelectorAll("input")].map((input) => input.checked));
     document.getElementById("quiz-confirm").style.display = "none";
-    document.getElementById("quiz-result").textContent = "恭喜您通过本次测验";
-    document.getElementById("quiz-result").style.display = "block";
+    const result = document.getElementById("quiz-result");
+    result.textContent = "再考一次";
+    result.style.display = "block";
+    setTimeout(() => {
+      result.textContent = "恭喜您通过本次测验";
+    }, 800);
   });
   document.getElementById("next-lesson").addEventListener("click", () => {
     window.__mockNextLessonCount += 1;

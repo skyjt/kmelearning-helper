@@ -805,7 +805,8 @@
         return Number(scoreMatch[1]) >= Number(passMatch[1]) ? "passed" : "failed";
       }
       if (/(?:测验|考试|答题).{0,12}(?:通过|合格)/.test(pageText)) return "passed";
-      return "failed";
+      // 平台会先渲染“再考一次”，随后才补上成绩和通过提示；此时继续等待完整结果。
+      return "pending";
     }
     return "pending";
   }
