@@ -184,6 +184,12 @@
   margin-bottom: 12px;
 }
 
+/* The grid display above would otherwise override the hidden attribute when the row is
+   suppressed on the home page. */
+.kme-learning-navigator-actions[hidden] {
+  display: none;
+}
+
 .kme-learning-navigator-tasks {
   margin-bottom: 12px;
   padding: 11px;
@@ -203,9 +209,28 @@
   font-weight: 700;
 }
 
-.kme-learning-navigator-task-header span:last-child {
+.kme-learning-navigator-task-refresh {
+  flex: none;
+  padding: 2px 9px;
+  border: 1px solid var(--kme-line);
+  border-radius: 999px;
+  background: transparent;
   color: var(--kme-muted);
-  font-weight: 500;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.4;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.kme-learning-navigator-task-refresh:hover {
+  border-color: rgba(36, 107, 254, 0.4);
+  background: rgba(36, 107, 254, 0.08);
+  color: var(--kme-accent);
+}
+
+.kme-learning-navigator-task-refresh:active {
+  transform: scale(0.94);
 }
 
 .kme-learning-navigator-task-list {

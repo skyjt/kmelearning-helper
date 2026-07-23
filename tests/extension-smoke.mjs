@@ -522,7 +522,7 @@ try {
     taskButtons: document.querySelectorAll(".kme-learning-navigator-task-item").length,
     inspect: window.__kmeLearningNavigator?.inspect?.()
   }));
-  if (!homeInitial.panel.includes("未完成任务 1") || homeInitial.taskButtons !== 1) {
+  if (!homeInitial.panel.includes("待学项目 1") || homeInitial.taskButtons !== 1) {
     throw new Error(`home task detection failed: ${JSON.stringify(homeInitial)}`);
   }
   if (homeInitial.inspect?.homeTasks?.length !== 2 || homeInitial.inspect.homeTasks.filter((task) => task.complete).length !== 1) {
@@ -579,7 +579,7 @@ try {
   if (!initial.panel.includes("学习助手") || initial.catalog.length !== 3) {
     throw new Error(`catalog detection failed: ${JSON.stringify(initial)}`);
   }
-  if (!initial.panel.includes("总进度 1/3")) {
+  if (!initial.panel.includes("课程进度 1/3")) {
     throw new Error(`initial progress failed: ${JSON.stringify(initial.panel)}`);
   }
 

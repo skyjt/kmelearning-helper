@@ -1799,7 +1799,7 @@
       } else if (isHomePage()) {
         state.settings.running = false;
         await storage.set({ running: false });
-        setStatus("请选择一个未完成任务后开始学习");
+        setStatus("请选择一个待学项目后开始学习");
         syncRunningUI();
       } else {
         const started = await clickStartControl();
@@ -1860,7 +1860,7 @@
   async function start() {
     const homeTasks = unfinishedHomeTasks();
     if (isHomePage()) {
-      setStatus(homeTasks.length ? "请从未完成任务列表中选择一项" : "当前没有检测到未完成任务");
+      setStatus(homeTasks.length ? "请从下方列表选择一个项目开始学习" : "当前没有检测到待学项目");
       updateHomeTaskDisplay(true);
       return;
     }
@@ -1884,7 +1884,7 @@
     if (!task) {
       hideTaskConfirmation();
       updateHomeTaskDisplay(true);
-      setStatus("任务列表已更新，请重新选择");
+      setStatus("项目列表已更新，请重新选择");
       return;
     }
 
@@ -1892,12 +1892,12 @@
     await beginLearningSession({
       catalogUrl: "",
       progress: { total: 0, completed: 0 },
-      status: `准备进入任务：${task.title}`
+      status: `准备进入项目：${task.title}`
     });
-    if (!clickElement(task.card, `进入任务：${task.title}`)) {
+    if (!clickElement(task.card, `进入项目：${task.title}`)) {
       state.settings.running = false;
       await storage.set({ running: false });
-      setStatus("任务卡片暂时无法点击，请刷新页面后重试");
+      setStatus("项目卡片暂时无法点击，请刷新页面后重试");
       syncRunningUI();
     }
   }
@@ -1921,7 +1921,7 @@
     const task = unfinishedHomeTasks().find((item) => item.key === taskKey);
     if (!task) {
       updateHomeTaskDisplay(true);
-      setStatus("任务列表已更新，请重新选择");
+      setStatus("项目列表已更新，请重新选择");
       return;
     }
 
@@ -1933,7 +1933,7 @@
     title.textContent = `开始自动学习“${task.title}”吗？`;
     confirmation.hidden = false;
     if (list) list.hidden = true;
-    setStatus("等待确认后进入任务");
+    setStatus("等待确认后进入项目");
   }
 
   function updateHomeTaskDisplay(force = false) {
@@ -1941,6 +1941,11 @@
     const list = document.querySelector(`#${EXT_ID}-task-list`);
     const count = document.querySelector(`#${EXT_ID}-task-count`);
     if (!container || !list || !count) return;
+
+    // The big start/scan buttons are inert on the signed-in home page (start() refuses to
+    // run there); the project list itself is the call to action, so hide that row entirely.
+    const actions = document.querySelector(`#${EXT_ID}-actions`);
+    if (actions) actions.hidden = isHomePage();
 
     if (!isHomePage()) {
       container.hidden = true;
@@ -1951,7 +1956,7 @@
 
     const tasks = unfinishedHomeTasks();
     container.hidden = false;
-    count.textContent = `未完成任务 ${tasks.length}`;
+    count.textContent = `待学项目 ${tasks.length}`;
 
     const signature = tasks.map((task) => `${task.key}|${task.title}|${task.type}`).join("\n");
     if (force || signature !== state.homeTaskSignature) {
@@ -1961,7 +1966,7 @@
       if (!tasks.length) {
         const empty = document.createElement("div");
         empty.className = `${EXT_ID}-task-empty`;
-        empty.textContent = "当前没有检测到未完成任务";
+        empty.textContent = "当前没有检测到待学项目";
         list.append(empty);
         hideTaskConfirmation();
       } else {
@@ -1971,14 +1976,20 @@
           button.className = `${EXT_ID}-task-item`;
           button.dataset.taskKey = task.key;
           button.disabled = state.settings.running;
+          button.title = task.title;
 
           const taskTitle = document.createElement("span");
           taskTitle.className = `${EXT_ID}-task-title`;
           taskTitle.textContent = task.title;
-          const taskType = document.createElement("span");
-          taskType.className = `${EXT_ID}-task-type`;
-          taskType.textContent = task.type;
-          button.append(taskTitle, taskType);
+          button.append(taskTitle);
+          // The section header already says these are projects, so repeating a “项目” badge
+          // on every row is noise; only show badges that carry extra information.
+          if (task.type && task.type !== "项目") {
+            const taskType = document.createElement("span");
+            taskType.className = `${EXT_ID}-task-type`;
+            taskType.textContent = task.type;
+            button.append(taskType);
+          }
           button.addEventListener("click", () => showTaskConfirmation(task.key));
           list.append(button);
         });
@@ -2005,16 +2016,23 @@
     const summary = document.querySelector(`#${EXT_ID}-summary`);
     if (!summary) return;
     updateProgressDisplay();
+    // On the home page the project section already shows the count, so use the summary line
+    // to explain the flow (project → its courses) instead of repeating a bare number.
+    if (isHomePage()) {
+      summary.textContent = unfinishedHomeTasks().length
+        ? "点击项目并确认后，将自动逐门学习其中未完成的课程"
+        : "";
+      return;
+    }
     const catalogCount = catalogRows().length;
     const contentCount = contentItems().length;
     const video = primaryVideo();
     const parts = [];
-    if (isHomePage()) parts.push(`未完成任务 ${unfinishedHomeTasks().length}`);
     if (state.settings.aiQuizEnabled && pageLooksQuestion()) {
       parts.push(`测验 ${extractQuizQuestions().length} 题`);
     }
-    if (catalogCount) parts.push(`目录 ${catalogCount}`);
-    if (contentCount) parts.push(`内容 ${contentCount}`);
+    if (catalogCount) parts.push(`课程 ${catalogCount}`);
+    if (contentCount) parts.push(`小节 ${contentCount}`);
     if (video && Number.isFinite(video.duration)) {
       parts.push(`视频 ${Math.floor(video.currentTime)}/${Math.floor(video.duration)} 秒`);
     }
@@ -2041,7 +2059,7 @@
     }
 
     container.style.display = "";
-    label.textContent = `总进度 ${progress.completed}/${progress.total} · ${progress.percent}%`;
+    label.textContent = `课程进度 ${progress.completed}/${progress.total} · ${progress.percent}%`;
     fill.style.width = `${progress.percent}%`;
   }
 
@@ -2051,11 +2069,7 @@
     const primary = document.querySelector(`.${EXT_ID}-primary`);
     if (primary) {
       primary.classList.toggle("is-running", state.settings.running);
-      primary.textContent = state.settings.running
-        ? "停止自动学习"
-        : (isHomePage()
-          ? (unfinishedHomeTasks().length ? "选择下方任务" : "检查任务")
-          : "开始自动学习");
+      primary.textContent = state.settings.running ? "停止自动学习" : "开始自动学习";
     }
     const dot = document.querySelector(`.${EXT_ID}-logo-dot`);
     if (dot) dot.classList.toggle("is-running", state.settings.running);
@@ -2554,13 +2568,14 @@
       updateHomeTaskDisplay(true);
       if (isHomePage() && !state.settings.running) {
         const taskCount = unfinishedHomeTasks().length;
-        setStatus(taskCount ? `检测到 ${taskCount} 个未完成任务` : "当前没有检测到未完成任务");
+        setStatus(taskCount ? `检测到 ${taskCount} 个待学项目` : "当前没有检测到待学项目");
       } else {
         tick("manual");
       }
     });
 
     const actions = document.createElement("div");
+    actions.id = `${EXT_ID}-actions`;
     actions.className = `${EXT_ID}-actions`;
     actions.append(primary, scan);
 
@@ -2573,10 +2588,20 @@
     taskHeader.className = `${EXT_ID}-task-header`;
     const taskCount = document.createElement("span");
     taskCount.id = `${EXT_ID}-task-count`;
-    taskCount.textContent = "未完成任务 0";
-    const taskHint = document.createElement("span");
-    taskHint.textContent = "点击选择";
-    taskHeader.append(taskCount, taskHint);
+    taskCount.textContent = "待学项目 0";
+    const taskRefresh = document.createElement("button");
+    taskRefresh.type = "button";
+    taskRefresh.id = `${EXT_ID}-task-refresh`;
+    taskRefresh.className = `${EXT_ID}-task-refresh`;
+    taskRefresh.textContent = "刷新";
+    taskRefresh.title = "重新扫描待学项目";
+    taskRefresh.addEventListener("click", () => {
+      invalidateScans();
+      updateHomeTaskDisplay(true);
+      const count2 = unfinishedHomeTasks().length;
+      setStatus(count2 ? `检测到 ${count2} 个待学项目` : "当前没有检测到待学项目");
+    });
+    taskHeader.append(taskCount, taskRefresh);
 
     const taskList = document.createElement("div");
     taskList.id = `${EXT_ID}-task-list`;
@@ -2586,14 +2611,14 @@
     taskConfirmation.id = `${EXT_ID}-task-confirmation`;
     taskConfirmation.className = `${EXT_ID}-task-confirmation`;
     taskConfirmation.setAttribute("role", "dialog");
-    taskConfirmation.setAttribute("aria-label", "确认自动学习任务");
+    taskConfirmation.setAttribute("aria-label", "确认自动学习项目");
     taskConfirmation.hidden = true;
 
     const taskConfirmationTitle = document.createElement("div");
     taskConfirmationTitle.id = `${EXT_ID}-task-confirmation-title`;
     taskConfirmationTitle.className = `${EXT_ID}-task-confirmation-title`;
     const taskConfirmationText = document.createElement("p");
-    taskConfirmationText.textContent = "确认后将进入该任务，并按顺序学习其中未完成的课程。";
+    taskConfirmationText.textContent = "确认后将进入该项目，按顺序学习其中未完成的课程。";
     const taskConfirmationActions = document.createElement("div");
     taskConfirmationActions.className = `${EXT_ID}-task-confirmation-actions`;
     const cancelTask = document.createElement("button");
@@ -2602,7 +2627,7 @@
     cancelTask.textContent = "取消";
     cancelTask.addEventListener("click", () => {
       hideTaskConfirmation();
-      setStatus("已取消，请选择需要学习的任务");
+      setStatus("已取消，请选择需要学习的项目");
     });
     const confirmTask = document.createElement("button");
     confirmTask.type = "button";
