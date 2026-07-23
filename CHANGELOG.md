@@ -3,6 +3,12 @@
 本文件记录 KME 学习助手（kmelearning-helper / KME Learning Navigator）各版本的主要变化。
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.10.1] - 2026-07-23
+
+### 修复（Fixed）
+- 修复课程目录中的测验名称使用“测试题”时未被识别，导致视频完成后直接返回上一级的问题。
+- 目录候选项改为复用统一的题目关键词识别，并为真实“《树立和践行正确政绩观》（下）测试题”名称补充双版本烟雾测试。
+
 ## [2.10.0] - 2026-07-23
 
 ### 变更（Changed）

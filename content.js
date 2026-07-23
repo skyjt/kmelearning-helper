@@ -337,7 +337,7 @@
   function questionLikeItem(el) {
     const text = textOf(el);
     if (!questionLikeText(text)) return false;
-    return !/课程|视频课程|培训课程/.test(text) || /考试|测验|答题|问卷|作业/.test(text);
+    return !/课程|视频课程|培训课程/.test(text) || /考试|测验|测试|练习|答题|题目|选择题|判断题|问卷|调研|作业/.test(text);
   }
 
   function pageLooksQuestion() {
@@ -1282,7 +1282,7 @@
           const text = textOf(el);
           if (!meaningfulRowText(text)) return false;
           if (/目录|记录|评论|收藏|返回|首页|搜索|设置/.test(text)) return false;
-          return /课程|视频|文档|材料|学习|考试|测验|作业|问卷|未完成|已完成|\d{1,2}:\d{2}/.test(text);
+          return /课程|视频|文档|材料|学习|未完成|已完成|\d{1,2}:\d{2}/.test(text) || questionLikeText(text);
         });
       items.push(...candidates);
     }

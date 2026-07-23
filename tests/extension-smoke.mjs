@@ -91,14 +91,14 @@ const html = String.raw`<!doctype html>
   }
 
   function paintCourse() {
-    const lessons = ["视频一", "随堂测验", "文档一"];
+    const lessons = ["视频一", "《树立和践行正确政绩观》（下）测试题", "文档一"];
     app.innerHTML =
       '<button id="back">返回</button>' +
       '<h1>课程内容：' + courses[currentCourse].title + '</h1>' +
       '<div class="layout"><aside class="scrollBody__Jdo84">' +
       lessons.map((lesson, index) => (
         '<div class="lesson-item ' + (index === currentLesson ? "active" : "") + '" data-index="' + index + '">' +
-        '<div class="cursor-pointer"><span>' + lesson + (index === 1 ? " 测验" : " 课程") + '</span></div>' +
+        '<div class="cursor-pointer"><span>' + lesson + (index === 1 ? "" : " 课程") + '</span></div>' +
         (lessonDone[index] ? check() : '<span>未完成</span>') +
         '</div>'
       )).join("") +
@@ -555,6 +555,27 @@ try {
   if (!homeFinal.text.includes("课程内容：任务课程一")) {
     throw new Error(`task auto navigation failed: ${JSON.stringify(homeFinal)}`);
   }
+
+  const recognitionPage = await context.newPage();
+  await recognitionPage.goto("https://pc.kmelearning.com/jsncxyslhs/home/training/study/recognition");
+  await recognitionPage.locator(".panelContent__VcTCG").filter({ hasText: "网络安全意识专题培训" }).click();
+  await recognitionPage.waitForFunction(() => document.body.innerText.includes("课程内容：网络安全意识专题培训"), undefined, { timeout: 5000 });
+  await injectHelper(recognitionPage);
+  await recognitionPage.waitForSelector("#kme-learning-navigator", { timeout: 10000 });
+  await recognitionPage.evaluate(() => {
+    const aiQuizToggle = document.querySelector("[data-kme-learning-navigator-setting='aiQuizEnabled']");
+    aiQuizToggle.checked = true;
+    aiQuizToggle.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await recognitionPage.waitForFunction(() => (
+    window.__kmeLearningNavigator?.inspect?.()?.nextContent?.includes("《树立和践行正确政绩观》（下）测试题")
+  ), undefined, { timeout: 5000 });
+  const recognitionState = await recognitionPage.evaluate(() => window.__kmeLearningNavigator?.inspect?.());
+  const realNamedQuiz = recognitionState?.content?.find((item) => item.text.includes("《树立和践行正确政绩观》（下）测试题"));
+  if (!realNamedQuiz?.question || realNamedQuiz.complete || !recognitionState.nextContent.includes("测试题")) {
+    throw new Error(`real named quiz detection failed: ${JSON.stringify(recognitionState)}`);
+  }
+  await recognitionPage.close();
 
   const page = await context.newPage();
   await page.goto("https://pc.kmelearning.com/jsncxyslhs/home/training/study/mock");
