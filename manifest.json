@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "KME Learning Navigator",
-  "description": "Detect unfinished KME tasks, confirm the selected task, and continue its learning pages automatically.",
-  "version": "2.7.1",
+  "description": "Automate KME learning tasks and assist visible quizzes with a user-configured AI model.",
+  "version": "2.8.0",
   "permissions": [
     "storage"
   ],

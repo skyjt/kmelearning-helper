@@ -20,7 +20,7 @@
 
 .kme-learning-navigator-panel {
   display: none;
-  width: 320px;
+  width: min(360px, calc(100vw - 32px));
   padding: 14px;
   border: 1px solid var(--kme-line);
   border-radius: 14px;
@@ -59,6 +59,9 @@
   position: absolute;
   top: 0;
   left: 0;
+  max-height: min(680px, calc(100vh - 64px));
+  padding-right: 2px;
+  overflow-y: auto;
   transform: rotateY(180deg);
   pointer-events: none;
 }
@@ -323,6 +326,151 @@
   filter: brightness(1.04);
 }
 
+.kme-learning-navigator-quiz {
+  margin-bottom: 12px;
+  padding: 11px;
+  border: 1px solid rgba(36, 107, 254, 0.18);
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(36, 107, 254, 0.07), rgba(33, 191, 174, 0.06));
+}
+
+.kme-learning-navigator-quiz-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+  font-weight: 700;
+}
+
+.kme-learning-navigator-quiz-header span:last-child {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(36, 107, 254, 0.1);
+  color: var(--kme-accent);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.kme-learning-navigator-quiz-message,
+.kme-learning-navigator-quiz-error,
+.kme-learning-navigator-quiz-note {
+  color: var(--kme-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.kme-learning-navigator-quiz-error {
+  margin-top: 6px;
+  color: var(--kme-danger);
+}
+
+.kme-learning-navigator-quiz-analyze,
+.kme-learning-navigator-quiz-apply-trusted,
+.kme-learning-navigator-quiz-apply-all,
+.kme-learning-navigator-ai-test,
+.kme-learning-navigator-ai-clear-key {
+  min-height: 34px;
+  border-radius: 9px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+
+.kme-learning-navigator-quiz-analyze {
+  width: 100%;
+  margin-top: 9px;
+  border: 0;
+  background: linear-gradient(135deg, var(--kme-accent), #3d82ff);
+  color: #fff;
+}
+
+.kme-learning-navigator-quiz-analyze:disabled,
+.kme-learning-navigator-quiz-apply-trusted:disabled,
+.kme-learning-navigator-quiz-apply-all:disabled,
+.kme-learning-navigator-ai-test:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.kme-learning-navigator-quiz-results {
+  display: flex;
+  max-height: 210px;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 9px;
+  overflow-y: auto;
+}
+
+.kme-learning-navigator-quiz-result {
+  padding: 8px 9px;
+  border: 1px solid rgba(33, 191, 174, 0.2);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.kme-learning-navigator-quiz-result.is-low {
+  border-color: rgba(229, 151, 0, 0.32);
+  background: rgba(255, 184, 0, 0.07);
+}
+
+.kme-learning-navigator-quiz-result.is-error {
+  border-color: rgba(229, 72, 77, 0.28);
+  background: rgba(229, 72, 77, 0.05);
+}
+
+.kme-learning-navigator-quiz-result-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--kme-ink);
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.kme-learning-navigator-quiz-result-heading span:last-child {
+  color: var(--kme-muted);
+  font-weight: 600;
+}
+
+.kme-learning-navigator-quiz-result-option {
+  margin-top: 4px;
+  color: var(--kme-ink);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.kme-learning-navigator-quiz-result-reason {
+  margin-top: 4px;
+  color: var(--kme-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.kme-learning-navigator-quiz-apply-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  margin-top: 9px;
+}
+
+.kme-learning-navigator-quiz-apply-trusted {
+  border: 0;
+  background: linear-gradient(135deg, var(--kme-accent-2), #37cdbb);
+  color: #fff;
+}
+
+.kme-learning-navigator-quiz-apply-all {
+  border: 1px solid var(--kme-line);
+  background: #fff;
+  color: var(--kme-ink);
+}
+
+.kme-learning-navigator-quiz-note {
+  margin-top: 8px;
+}
+
 .kme-learning-navigator-primary,
 .kme-learning-navigator-secondary {
   height: 38px;
@@ -409,6 +557,88 @@
   justify-content: space-between;
   min-height: 32px;
   gap: 12px;
+}
+
+.kme-learning-navigator-ai-config {
+  margin-top: 11px;
+  padding: 10px;
+  border: 1px solid rgba(36, 107, 254, 0.16);
+  border-radius: 11px;
+  background: rgba(36, 107, 254, 0.035);
+}
+
+.kme-learning-navigator-ai-config-title {
+  margin-bottom: 8px;
+  color: var(--kme-ink);
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.kme-learning-navigator-ai-field {
+  display: block;
+  margin-top: 8px;
+}
+
+.kme-learning-navigator-ai-field > span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--kme-muted);
+  font-size: 11.5px;
+}
+
+.kme-learning-navigator-ai-field input {
+  width: 100%;
+  height: 34px;
+  padding: 0 9px;
+  border: 1px solid var(--kme-line);
+  border-radius: 8px;
+  outline: none;
+  background: #fff;
+  color: var(--kme-ink);
+  font: inherit;
+  font-size: 12px;
+}
+
+.kme-learning-navigator-ai-field input:focus {
+  border-color: rgba(36, 107, 254, 0.55);
+  box-shadow: 0 0 0 3px rgba(36, 107, 254, 0.09);
+}
+
+.kme-learning-navigator-ai-config .kme-learning-navigator-row {
+  margin-top: 7px;
+}
+
+.kme-learning-navigator-ai-test {
+  border: 1px solid rgba(36, 107, 254, 0.25);
+  background: rgba(36, 107, 254, 0.08);
+  color: var(--kme-accent);
+}
+
+.kme-learning-navigator-ai-config-actions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 7px;
+  margin-top: 9px;
+}
+
+.kme-learning-navigator-ai-clear-key {
+  padding: 0 10px;
+  border: 1px solid var(--kme-line);
+  background: #fff;
+  color: var(--kme-muted);
+}
+
+.kme-learning-navigator-ai-config-status,
+.kme-learning-navigator-ai-config-note {
+  margin-top: 7px;
+  color: var(--kme-muted);
+  font-size: 11px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.kme-learning-navigator-ai-config-status.is-error {
+  color: var(--kme-danger);
 }
 
 /* Render the native checkboxes as compact toggle switches without touching the markup. */
@@ -556,7 +786,11 @@
   }
 
   .kme-learning-navigator-task-item,
-  .kme-learning-navigator-task-cancel {
+  .kme-learning-navigator-task-cancel,
+  .kme-learning-navigator-quiz-result,
+  .kme-learning-navigator-quiz-apply-all,
+  .kme-learning-navigator-ai-clear-key,
+  .kme-learning-navigator-ai-field input {
     background: rgba(255, 255, 255, 0.06);
     color: var(--kme-ink);
   }

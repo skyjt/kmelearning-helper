@@ -19,7 +19,7 @@ const metadata = `// ==UserScript==
 // @name         KME 学习助手
 // @namespace    https://github.com/skyjt/kmelearning-helper
 // @version      ${manifest.version}
-// @description  自动按目录学习 KME 课程，并等待平台确认完成后继续下一门。
+// @description  自动按目录学习 KME 课程，并通过用户配置的大模型辅助完成可见测验。
 // @author       skyjt
 // @license      MIT
 // @homepageURL  https://github.com/skyjt/kmelearning-helper
@@ -27,12 +27,14 @@ const metadata = `// ==UserScript==
 // @updateURL    https://raw.githubusercontent.com/skyjt/kmelearning-helper/main/userscript/kme-learning-helper.user.js
 // @downloadURL  https://raw.githubusercontent.com/skyjt/kmelearning-helper/main/userscript/kme-learning-helper.user.js
 // @match        https://pc.kmelearning.com/*
+// @connect      *
 // @icon         ${iconDataUrl}
 // @run-at       document-idle
 // @noframes
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_addStyle
+// @grant        GM_xmlhttpRequest
 // ==/UserScript==`;
 
 const generated = `${metadata}
@@ -44,6 +46,38 @@ const generated = `${metadata}
 
   const USERSCRIPT_ICON_URL = ${JSON.stringify(iconDataUrl)};
   const USERSCRIPT_STYLES = ${JSON.stringify(styles)};
+
+  const KME_USERSCRIPT_HTTP_REQUEST = ({ method, url, headers, body, timeoutMs }) => new Promise((resolve, reject) => {
+    try {
+      GM_xmlhttpRequest({
+        method,
+        url,
+        headers,
+        data: body,
+        timeout: timeoutMs,
+        responseType: "text",
+        anonymous: true,
+        onload(response) {
+          resolve({
+            status: Number(response.status || 0),
+            statusText: response.statusText || "",
+            responseText: response.responseText || ""
+          });
+        },
+        onerror() {
+          reject(new Error("模型接口请求失败，请检查地址和油猴域名授权"));
+        },
+        ontimeout() {
+          reject(new Error("模型请求超时，请稍后重试"));
+        },
+        onabort() {
+          reject(new Error("模型请求已取消"));
+        }
+      });
+    } catch {
+      reject(new Error("无法启动模型请求，请检查油猴脚本权限"));
+    }
+  });
 
   // Keep the shared content script unchanged by presenting the small callback-style subset
   // of the Chrome APIs it uses. Tampermonkey owns the underlying persistent storage.

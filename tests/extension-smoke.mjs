@@ -311,6 +311,76 @@ const timeShortHtml = String.raw`<!doctype html>
 </body>
 </html>`;
 
+const quizHtml = String.raw`<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>江苏农商联合银行</title>
+  <style>
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    main { min-height: 720px; padding: 24px; }
+    .course-main-content { width: 760px; }
+    .mx-auto { display: flex; flex-direction: column; gap: 24px; }
+    .w-full { width: 100%; }
+    .question-title { margin-bottom: 12px; font-weight: 600; }
+    label { display: flex; align-items: center; min-height: 30px; gap: 8px; cursor: pointer; }
+    #quiz-submit { margin-top: 24px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>AI 测验课程</h1>
+  <section class="course-main-content">
+    <div class="mx-auto flex flex-col gap-8">
+      <div class="w-full" data-question="1">
+        <div class="question-title">1. (单选题) 新时代的硬道理是（ ）。</div>
+        <label><input type="radio" name="q1"><span>高速发展</span></label>
+        <label><input type="radio" name="q1"><span>高质量发展</span></label>
+        <label><input type="radio" name="q1"><span>规模扩张</span></label>
+        <label><input type="radio" name="q1"><span>粗放发展</span></label>
+      </div>
+      <div class="w-full" data-question="2">
+        <div class="question-title">2. (多选题) 完善干部考核评价机制应关注（ ）。</div>
+        <label><input type="checkbox"><span>显绩与潜绩</span></label>
+        <label><input type="checkbox"><span>只看短期速度</span></label>
+        <label><input type="checkbox"><span>当下与长远</span></label>
+        <label><input type="checkbox"><span>只看经济效益</span></label>
+      </div>
+      <div class="w-full" data-question="3">
+        <div class="question-title">3. (判断题) 功成不必在我与功成必定有我可以统一起来。</div>
+        <label><input type="radio" name="q3"><span>对</span></label>
+        <label><input type="radio" name="q3"><span>错</span></label>
+      </div>
+    </div>
+    <button id="quiz-submit" type="button">提交答案</button>
+  </section>
+</main>
+<div id="quiz-notice" role="dialog">
+  <strong>测验须知</strong>
+  <span>共 3 题，请检查答案后提交。</span>
+  <button id="quiz-notice-close" type="button">我知道了</button>
+</div>
+<script>
+  window.__mockQuizSubmitCount = 0;
+  window.__mockAiResponse = ${JSON.stringify(String.raw`\`\`\`json
+{
+  "answers": [
+    { "question": 1, "selected": ["B"], "confidence": 0.96, "reason": "新时代强调高质量发展" },
+    { "question": 2, "selected": ["A", "C"], "confidence": 0.88, "reason": "兼顾显绩潜绩与当下长远" },
+    { "question": 3, "selected": ["A"], "confidence": 0.42, "reason": "两者体现境界与担当的统一" }
+  ]
+}
+\`\`\``)};
+  document.getElementById("quiz-submit").addEventListener("click", () => {
+    window.__mockQuizSubmitCount += 1;
+  });
+  document.getElementById("quiz-notice-close").addEventListener("click", () => {
+    document.getElementById("quiz-notice").style.display = "none";
+  });
+</script>
+</body>
+</html>`;
+
 const browser = await chromium.launch({
   headless: true,
   executablePath: fs.existsSync(chromeExecutable) ? chromeExecutable : undefined
@@ -349,13 +419,51 @@ try {
       document.documentElement.appendChild(style);
       return style;
     };
+    window.__mockModelRequests = [];
+    const mockModelResponse = () => JSON.stringify({
+      choices: [{ message: { content: window.__mockAiResponse || '{"answers":[]}' } }]
+    });
+    window.GM_xmlhttpRequest = (details) => {
+      window.__mockModelRequests.push({
+        transport: "userscript",
+        url: details.url,
+        headers: details.headers,
+        body: details.data
+      });
+      const timer = window.setTimeout(() => {
+        details.onload?.({ status: 200, statusText: "OK", responseText: mockModelResponse() });
+      }, 60);
+      return {
+        abort() {
+          window.clearTimeout(timer);
+          details.onabort?.();
+        }
+      };
+    };
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = async (input, init) => {
+      const url = String(input);
+      if (!url.includes("mock-ai.example")) return nativeFetch(input, init);
+      window.__mockModelRequests.push({
+        transport: "extension",
+        url,
+        headers: init?.headers,
+        body: init?.body
+      });
+      return new Response(mockModelResponse(), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    };
   });
 
   await context.route("https://pc.kmelearning.com/**", (route) => {
     const requestUrl = route.request().url();
     const body = requestUrl.includes("/time-short")
       ? timeShortHtml
-      : (requestUrl.includes("/home/index") ? homeHtml : html);
+      : (requestUrl.includes("/quiz-ai")
+        ? quizHtml
+        : (requestUrl.includes("/home/index") ? homeHtml : html));
     route.fulfill({ status: 200, contentType: "text/html", body });
   });
 
@@ -524,6 +632,159 @@ try {
     throw new Error(`stale course record refresh failed: ${JSON.stringify(timeState)}`);
   }
 
+  const quizPage = await context.newPage();
+  await quizPage.goto("https://pc.kmelearning.com/jsncxyslhs/home/course/quiz-ai");
+  await quizPage.evaluate((currentTarget) => {
+    const settings = {
+      aiQuizEnabled: true,
+      skipQuestions: false,
+      aiEndpoint: "https://mock-ai.example/v1/chat/completions",
+      aiModel: "mock-answer-model",
+      aiRememberApiKey: true,
+      aiApiKey: "test-only-key"
+    };
+    if (currentTarget === "userscript") Object.assign(window.__mockUserscriptStorage, settings);
+    else Object.assign(window.__mockChromeStorage, settings);
+  }, target);
+  await injectHelper(quizPage);
+  await quizPage.waitForSelector("#kme-learning-navigator", { timeout: 10000 });
+  await quizPage.waitForSelector("#kme-learning-navigator-quiz", { state: "visible", timeout: 5000 });
+  const quizInitial = await quizPage.evaluate(() => ({
+    panel: document.querySelector("#kme-learning-navigator")?.innerText || "",
+    inspect: window.__kmeLearningNavigator?.inspect?.()
+  }));
+  if (!quizInitial.panel.includes("AI 答题辅助") || quizInitial.inspect?.quiz?.detected !== true) {
+    throw new Error(`quiz assistant detection failed: ${JSON.stringify(quizInitial)}`);
+  }
+
+  await quizPage.locator(".kme-learning-navigator-settings").click();
+  await quizPage.waitForFunction(() => document.querySelector("#kme-learning-navigator")?.classList.contains("flipped"));
+  const quizConfig = await quizPage.evaluate(() => ({
+    endpoint: document.querySelector('[data-kme-learning-navigator-ai-field="aiEndpoint"]')?.value,
+    model: document.querySelector('[data-kme-learning-navigator-ai-field="aiModel"]')?.value,
+    keyType: document.querySelector('[data-kme-learning-navigator-ai-field="aiApiKey"]')?.type,
+    keyValue: document.querySelector('[data-kme-learning-navigator-ai-field="aiApiKey"]')?.value,
+    aiEnabled: document.querySelector('[data-kme-learning-navigator-setting="aiQuizEnabled"]')?.checked,
+    skipQuestions: document.querySelector('[data-kme-learning-navigator-setting="skipQuestions"]')?.checked
+  }));
+  if (quizConfig.endpoint !== "https://mock-ai.example/v1/chat/completions" ||
+      quizConfig.model !== "mock-answer-model" ||
+      quizConfig.keyType !== "password" ||
+      quizConfig.keyValue !== "" ||
+      !quizConfig.aiEnabled || quizConfig.skipQuestions) {
+    throw new Error(`quiz AI config UI failed: ${JSON.stringify(quizConfig)}`);
+  }
+  await quizPage.locator('[data-kme-learning-navigator-setting="skipQuestions"]').click();
+  await quizPage.waitForFunction(() => (
+    document.querySelector('[data-kme-learning-navigator-setting="skipQuestions"]')?.checked &&
+    !document.querySelector('[data-kme-learning-navigator-setting="aiQuizEnabled"]')?.checked &&
+    document.querySelector("#kme-learning-navigator-ai-config")?.hidden
+  ));
+  await quizPage.locator('[data-kme-learning-navigator-setting="aiQuizEnabled"]').click();
+  await quizPage.waitForFunction(() => (
+    document.querySelector('[data-kme-learning-navigator-setting="aiQuizEnabled"]')?.checked &&
+    !document.querySelector('[data-kme-learning-navigator-setting="skipQuestions"]')?.checked &&
+    !document.querySelector("#kme-learning-navigator-ai-config")?.hidden
+  ));
+  await quizPage.locator(".kme-learning-navigator-done").click();
+  await quizPage.waitForFunction(() => !document.querySelector("#kme-learning-navigator")?.classList.contains("flipped"));
+  await quizPage.locator(".kme-learning-navigator-primary").click();
+  await quizPage.waitForFunction(() => window.__kmeLearningNavigator?.inspect?.()?.running === true);
+
+  await quizPage.locator("#kme-learning-navigator-quiz-analyze").click();
+  await quizPage.waitForFunction(() => (
+    window.__mockModelRequests.length === 1 &&
+    window.__kmeLearningNavigator?.inspect?.()?.quiz?.answers?.length === 3
+  ), undefined, { timeout: 10000 });
+  const quizAnalyzed = await quizPage.evaluate(() => {
+    const request = window.__mockModelRequests[0];
+    return {
+      request: {
+        transport: request.transport,
+        url: request.url,
+        hasAuthorization: Boolean(request.headers?.Authorization || request.headers?.authorization),
+        body: JSON.parse(request.body)
+      },
+      lowConfidenceRows: document.querySelectorAll(".kme-learning-navigator-quiz-result.is-low").length,
+      inspect: window.__kmeLearningNavigator.inspect(),
+      submitCount: window.__mockQuizSubmitCount
+    };
+  });
+  const quizPrompt = quizAnalyzed.request.body.messages?.map((message) => message.content).join("\n") || "";
+  if (quizAnalyzed.request.url !== "https://mock-ai.example/v1/chat/completions" ||
+      !quizAnalyzed.request.hasAuthorization ||
+      quizAnalyzed.request.body.model !== "mock-answer-model" ||
+      !quizPrompt.includes("新时代的硬道理") ||
+      quizPrompt.includes("answerResult") ||
+      JSON.stringify(quizAnalyzed.request.body).includes("test-only-key") ||
+      quizAnalyzed.lowConfidenceRows !== 1 ||
+      quizAnalyzed.submitCount !== 0) {
+    throw new Error(`quiz model request / preview failed: ${JSON.stringify(quizAnalyzed)}`);
+  }
+
+  await quizPage.locator("#kme-learning-navigator-quiz-apply-trusted").click();
+  try {
+    await quizPage.waitForFunction(() => window.__kmeLearningNavigator?.inspect?.()?.quiz?.error.includes("测验须知"), undefined, { timeout: 5000 });
+  } catch {
+    const diagnostics = await quizPage.evaluate(() => {
+      const dialog = document.getElementById("quiz-notice");
+      const rect = dialog?.getBoundingClientRect();
+      return {
+        dialogText: dialog?.innerText,
+        dialogDisplay: dialog ? getComputedStyle(dialog).display : "missing",
+        dialogRect: rect ? { width: rect.width, height: rect.height, top: rect.top, right: rect.right } : null,
+        applyDisabled: document.querySelector("#kme-learning-navigator-quiz-apply-trusted")?.disabled,
+        inspect: window.__kmeLearningNavigator?.inspect?.()
+      };
+    });
+    throw new Error(`quiz notice guard did not activate: ${JSON.stringify(diagnostics)}`);
+  }
+  const noticeGuard = await quizPage.evaluate(() => ({
+    selected: [...document.querySelectorAll("[data-question] input")].some((input) => input.checked),
+    submitCount: window.__mockQuizSubmitCount
+  }));
+  if (noticeGuard.selected || noticeGuard.submitCount !== 0) {
+    throw new Error(`quiz notice guard failed: ${JSON.stringify(noticeGuard)}`);
+  }
+  await quizPage.locator("#quiz-notice-close").click();
+  await quizPage.locator("#kme-learning-navigator-quiz-apply-trusted").click();
+  await quizPage.waitForFunction(() => {
+    const groups = [...document.querySelectorAll("[data-question]")];
+    const selected = groups.map((group) => [...group.querySelectorAll("input")].map((input) => input.checked));
+    return selected[0]?.[1] && selected[1]?.[0] && selected[1]?.[2] && !selected[2]?.some(Boolean);
+  }, undefined, { timeout: 5000 });
+  const trustedSelection = await quizPage.evaluate(() => ({
+    selected: [...document.querySelectorAll("[data-question]")]
+      .map((group) => [...group.querySelectorAll("input")].map((input) => input.checked)),
+    submitCount: window.__mockQuizSubmitCount
+  }));
+  if (trustedSelection.submitCount !== 0 || trustedSelection.selected[2].some(Boolean)) {
+    throw new Error(`trusted quiz answers submitted or filled low-confidence answer: ${JSON.stringify(trustedSelection)}`);
+  }
+
+  await quizPage.locator("#kme-learning-navigator-quiz-apply-all").click();
+  await quizPage.waitForFunction(() => document.querySelector('[data-question="3"] input')?.checked, undefined, { timeout: 5000 });
+  const quizFinal = await quizPage.evaluate(() => ({
+    selected: [...document.querySelectorAll("[data-question]")]
+      .map((group) => [...group.querySelectorAll("input")].map((input) => input.checked)),
+    submitCount: window.__mockQuizSubmitCount,
+    status: document.querySelector("#kme-learning-navigator-status")?.innerText || ""
+  }));
+  if (quizFinal.submitCount !== 0 || !quizFinal.status.includes("请检查后")) {
+    throw new Error(`quiz apply-all / submit guard failed: ${JSON.stringify(quizFinal)}`);
+  }
+  await quizPage.evaluate(() => { window.__mockAiResponse = "model returned plain text"; });
+  await quizPage.locator("#kme-learning-navigator-quiz-analyze").click();
+  await quizPage.waitForFunction(() => Boolean(window.__kmeLearningNavigator?.inspect?.()?.quiz?.error), undefined, { timeout: 5000 });
+  const quizErrorState = await quizPage.evaluate(() => ({
+    error: window.__kmeLearningNavigator.inspect().quiz.error,
+    requests: window.__mockModelRequests.length,
+    submitCount: window.__mockQuizSubmitCount
+  }));
+  if (!quizErrorState.error.includes("JSON") || quizErrorState.requests !== 2 || quizErrorState.submitCount !== 0) {
+    throw new Error(`quiz malformed-response guard failed: ${JSON.stringify(quizErrorState)}`);
+  }
+
   console.log(JSON.stringify({
     ok: true,
     target,
@@ -542,6 +803,14 @@ try {
       recordRefreshCount: timeState.recordRefreshCount,
       requiredSeconds: timeState.inspect.timeRequirement.requiredSeconds,
       learnedSeconds: timeState.inspect.timeRequirement.learnedSeconds
+    },
+    aiQuiz: {
+      questions: quizAnalyzed.inspect.quiz.questions,
+      answers: quizAnalyzed.inspect.quiz.answers.length,
+      transport: quizAnalyzed.request.transport,
+      lowConfidenceRows: quizAnalyzed.lowConfidenceRows,
+      submitCount: quizFinal.submitCount,
+      malformedResponseGuard: Boolean(quizErrorState.error)
     },
     currentPage: "电子邮件安全"
   }, null, 2));
