@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         KME 学习助手
 // @namespace    https://github.com/skyjt/kmelearning-helper
-// @version      2.8.1
-// @description  自动按目录学习 KME 课程，并通过用户配置的大模型辅助完成可见测验。
+// @version      2.9.0
+// @description  自动学习 KME 课程，并通过用户配置的大模型完成可见测验和后续课程。
 // @author       skyjt
 // @license      MIT
 // @homepageURL  https://github.com/skyjt/kmelearning-helper
@@ -128,6 +128,8 @@
   const COURSE_RECORD_REFRESH_WAIT_MS = 4500;
   const AI_QUIZ_CONFIDENCE_THRESHOLD = 0.65;
   const AI_REQUEST_TIMEOUT_MS = 60000;
+  const AI_QUIZ_RESULT_WAIT_MS = 20000;
+  const AI_QUIZ_MAX_ANALYSIS_ATTEMPTS = 2;
   const DEFAULTS = {
     running: false,
     autoPlay: true,
@@ -135,6 +137,7 @@
     enforceCourseTotalTime: true,
     skipQuestions: true,
     aiQuizEnabled: false,
+    aiQuizAutoSubmit: true,
     aiEndpoint: "https://api.openai.com/v1/chat/completions",
     aiModel: "",
     aiRememberApiKey: false,
@@ -183,6 +186,10 @@
     quizMessage: "",
     quizRenderSignature: "",
     quizPanelAutoOpenedKey: "",
+    quizAutoFingerprint: "",
+    quizAutoPhase: "idle",
+    quizAutoAttempts: 0,
+    quizSubmittedAt: 0,
     rootEl: null
   };
 
@@ -700,6 +707,12 @@
   }
 
   function resetQuizResult(fingerprint = "", questions = []) {
+    if (fingerprint !== state.quizAutoFingerprint) {
+      state.quizAutoFingerprint = fingerprint;
+      state.quizAutoPhase = "idle";
+      state.quizAutoAttempts = 0;
+      state.quizSubmittedAt = 0;
+    }
     state.quizFingerprint = fingerprint;
     state.quizQuestions = plainQuizQuestions(questions);
     state.quizAnswers = [];
@@ -709,17 +722,17 @@
   }
 
   async function analyzeQuiz() {
-    if (state.quizBusy) return;
+    if (state.quizBusy) return false;
     const questions = extractQuizQuestions();
     if (!questions.length) {
       state.quizError = "暂时没有识别到可分析的题目";
       updateQuizDisplay(true);
-      return;
+      return false;
     }
     if (questions.some((question) => question.imageUrls.length)) {
       state.quizError = "检测到图片题，当前版本暂不支持视觉模型，请人工完成图片题";
       updateQuizDisplay(true);
-      return;
+      return false;
     }
 
     const fingerprint = quizFingerprint(questions);
@@ -737,10 +750,12 @@
       state.quizMessage = `AI 已返回 ${valid}/${questions.length} 题${low ? `，其中 ${low} 题置信度较低` : ""}`;
       state.quizError = valid ? "" : "模型没有返回可用答案";
       setStatus(state.quizMessage);
+      return valid === questions.length;
     } catch (error) {
       state.quizError = normalize(error?.message || "AI 分析失败");
       state.quizMessage = "";
       setStatus(`AI 分析失败：${state.quizError}`);
+      return false;
     } finally {
       state.quizBusy = false;
       state.quizRenderSignature = "";
@@ -756,24 +771,44 @@
     return left.length === right.length && [...left].sort().every((value, index) => value === [...right].sort()[index]);
   }
 
-  function quizNoticeOpen() {
+  function platformDialogs() {
     return [...document.querySelectorAll("[role='dialog'], .ant5-modal, .ant-modal")]
-      .some((dialog) => visible(dialog) && /测验须知/.test(textOf(dialog)));
+      .filter((dialog) => visible(dialog) && !state.rootEl?.contains(dialog));
+  }
+
+  function quizNoticeDialog() {
+    return platformDialogs().find((dialog) => /测验须知/.test(textOf(dialog))) || null;
+  }
+
+  function quizNoticeOpen() {
+    return Boolean(quizNoticeDialog());
+  }
+
+  async function dismissQuizNotice() {
+    const dialog = quizNoticeDialog();
+    if (!dialog) return true;
+    const controls = [...dialog.querySelectorAll("button, [role='button']")].filter(visible);
+    const acknowledge = controls.find((control) => /^(?:我知道了|知道了|确定|关闭|Close)$/i.test(textOf(control) || control.getAttribute("aria-label") || ""));
+    if (!acknowledge) return false;
+    acknowledge.click();
+    await sleep(450);
+    invalidateScans();
+    return !quizNoticeOpen();
   }
 
   async function applyQuizAnswers(includeLowConfidence) {
-    if (state.quizBusy || !state.quizAnswers.length) return;
+    if (state.quizBusy || !state.quizAnswers.length) return false;
     if (quizNoticeOpen()) {
       state.quizError = "请先关闭平台的测验须知，再应用答案";
       updateQuizDisplay(true);
-      return;
+      return false;
     }
     const questions = extractQuizQuestions();
     if (quizFingerprint(questions) !== state.quizFingerprint) {
       resetQuizResult(quizFingerprint(questions), questions);
       state.quizError = "题目内容已经变化，请重新调用 AI 分析";
       updateQuizDisplay(true);
-      return;
+      return false;
     }
 
     const applicable = state.quizAnswers.filter((answer) => (
@@ -782,7 +817,7 @@
     if (!applicable.length) {
       state.quizError = includeLowConfidence ? "没有可应用的答案" : "没有达到置信度要求的答案";
       updateQuizDisplay(true);
-      return;
+      return false;
     }
 
     state.quizBusy = true;
@@ -826,6 +861,7 @@
     setStatus(state.quizMessage);
     state.quizRenderSignature = "";
     updateQuizDisplay(true);
+    return applied === applicable.length;
   }
 
   async function testAiConnection() {
@@ -847,7 +883,197 @@
     }
   }
 
-  function handleAiQuizPage() {
+  function quizResultStatus() {
+    const feedbackTexts = [...document.querySelectorAll("div, p, span, h1, h2, h3, h4")]
+      .filter((el) => visible(el) && !state.rootEl?.contains(el))
+      .map((el) => textOf(el))
+      .filter((text) => text.length >= 2 && text.length <= 120);
+    if (feedbackTexts.some((text) => (
+      /^(?:本次)?(?:测验|考试|答题)(?:未|没有)(?:通过|完成|合格)/.test(text) ||
+      /^很遗憾[，,!！\s]*(?:您|你)?(?:本次)?(?:未|没有)(?:通过|完成|合格)(?:本次)?(?:测验|考试|答题)/.test(text) ||
+      /^未达到(?:合格|通过)标准/.test(text)
+    ))) return "failed";
+    if (feedbackTexts.some((text) => (
+      /^(?:恭喜(?:您|你)?[，,!！\s]*)?(?:本次)?(?:测验|考试|答题)(?:已)?(?:通过|合格)(?=$|[\s，,。.!！：:])/.test(text) ||
+      /^恭喜(?:您|你)?(?:已)?通过(?:本次)?(?:测验|考试|答题)/.test(text)
+    ))) return "passed";
+
+    const active = activeContentItem();
+    if (state.quizSubmittedAt && active && questionLikeItem(active) && itemComplete(active)) return "passed";
+
+    const panelText = textOf(state.rootEl);
+    const pageText = normalize(textOf(document.body).replace(panelText, ""));
+    if (/重新答题|再考一次/.test(pageText)) {
+      const scoreMatch = pageText.match(/(?:本次)?(?:得分|成绩|正确率)\s*[:：]?\s*(\d+(?:\.\d+)?)\s*(?:分|%)?/);
+      const passMatch = pageText.match(/合格分数\s*[:：]?\s*(\d+(?:\.\d+)?)/);
+      if (scoreMatch && passMatch) {
+        return Number(scoreMatch[1]) >= Number(passMatch[1]) ? "passed" : "failed";
+      }
+      if (/(?:测验|考试|答题).{0,12}(?:通过|合格)/.test(pageText)) return "passed";
+      return "failed";
+    }
+    return "pending";
+  }
+
+  function nativeQuizSubmitButton() {
+    return [...document.querySelectorAll("button, [role='button'], input[type='submit']")]
+      .filter((control) => visible(control) && !state.rootEl?.contains(control) && !control.disabled)
+      .find((control) => {
+        const label = normalize(control.value || textOf(control));
+        return /^(?:提交答案|提交试卷|确认交卷|交卷|提交)(?:\s*[（(]\d+\s*\/\s*\d+[）)])?$/.test(label);
+      }) || null;
+  }
+
+  function quizSubmitConfirmationButton() {
+    for (const dialog of platformDialogs()) {
+      const dialogText = textOf(dialog);
+      if (/测验须知/.test(dialogText) || !/(?:提交|交卷)/.test(dialogText)) continue;
+      const button = [...dialog.querySelectorAll("button, [role='button']")]
+        .filter((control) => visible(control) && !control.disabled)
+        .find((control) => /^(?:确认提交答案|确定提交答案|提交答案|确认提交|确定提交|确认交卷|确定交卷|提交|确认|确定|交卷)$/.test(textOf(control)));
+      if (button) return button;
+    }
+    return null;
+  }
+
+  async function stopAutomaticQuiz(message) {
+    state.quizAutoPhase = "failed";
+    state.quizError = message;
+    state.quizMessage = "";
+    state.settings.running = false;
+    await storage.set({ running: false });
+    setStatus(`全自动答题已停止：${message}`);
+    syncRunningUI();
+    updateQuizDisplay(true);
+    return false;
+  }
+
+  async function waitForQuizResult(startUrl) {
+    const startedAt = now();
+    while (now() - startedAt < AI_QUIZ_RESULT_WAIT_MS) {
+      await sleep(400);
+      invalidateScans();
+      const result = quizResultStatus();
+      if (result !== "pending") return result;
+      if (now() - startedAt > 1000 && location.href !== startUrl && !pageLooksQuestion()) return "navigated";
+      if (now() - startedAt > 1000 && !quizRoot() && !pageLooksQuestion()) return "navigated";
+    }
+    return "timeout";
+  }
+
+  async function submitAutomaticQuiz() {
+    const submit = nativeQuizSubmitButton();
+    if (!submit) return "missing-submit";
+    state.quizAutoPhase = "submitting";
+    state.quizMessage = "答案已填写，正在自动提交…";
+    state.quizError = "";
+    setStatus(state.quizMessage);
+    updateQuizDisplay(true);
+    const startUrl = location.href;
+    submit.click();
+    state.quizSubmittedAt = now();
+
+    for (let index = 0; index < 12; index += 1) {
+      await sleep(250);
+      invalidateScans();
+      if (quizResultStatus() !== "pending") break;
+      const confirm = quizSubmitConfirmationButton();
+      if (confirm) {
+        confirm.click();
+        break;
+      }
+    }
+
+    state.quizAutoPhase = "waiting-result";
+    state.quizMessage = "答案已提交，正在等待测验结果…";
+    setStatus(state.quizMessage);
+    updateQuizDisplay(true);
+    return waitForQuizResult(startUrl);
+  }
+
+  function automaticQuizActive() {
+    return Boolean(state.settings.running && state.settings.aiQuizEnabled && state.settings.aiQuizAutoSubmit);
+  }
+
+  async function runAutomaticQuiz(fingerprint, questions) {
+    if (["dismissing", "analyzing", "applying", "submitting", "waiting-result", "completed", "failed"]
+      .includes(state.quizAutoPhase)) return;
+
+    state.quizAutoPhase = "dismissing";
+    state.quizMessage = "检测到测验，正在进入全自动答题…";
+    setStatus(state.quizMessage);
+    updateQuizDisplay(true);
+    if (!await dismissQuizNotice()) {
+      await stopAutomaticQuiz("无法关闭平台的测验须知");
+      return;
+    }
+    if (!automaticQuizActive()) {
+      state.quizAutoPhase = "idle";
+      return;
+    }
+
+    let analyzed = false;
+    for (let attempt = 1; attempt <= AI_QUIZ_MAX_ANALYSIS_ATTEMPTS; attempt += 1) {
+      state.quizAutoAttempts = attempt;
+      state.quizAutoPhase = "analyzing";
+      analyzed = await analyzeQuiz();
+      if (analyzed || !automaticQuizActive()) break;
+      if (attempt < AI_QUIZ_MAX_ANALYSIS_ATTEMPTS) {
+        state.quizError = "";
+        state.quizMessage = `AI 分析失败，正在进行第 ${attempt + 1} 次尝试…`;
+        setStatus(state.quizMessage);
+        updateQuizDisplay(true);
+        await sleep(1200);
+      }
+    }
+    if (!automaticQuizActive()) {
+      state.quizAutoPhase = "idle";
+      return;
+    }
+    const allAnswersValid = analyzed && state.quizAnswers.length === questions.length && state.quizAnswers.every((answer) => answer.valid);
+    if (!allAnswersValid) {
+      await stopAutomaticQuiz(state.quizError || "模型未返回全部题目的有效答案");
+      return;
+    }
+
+    state.quizAutoPhase = "applying";
+    const applied = await applyQuizAnswers(true);
+    if (!automaticQuizActive()) {
+      state.quizAutoPhase = "idle";
+      return;
+    }
+    if (!applied || quizFingerprint(extractQuizQuestions()) !== fingerprint) {
+      await stopAutomaticQuiz(state.quizError || "答案未能完整写入页面");
+      return;
+    }
+
+    const result = await submitAutomaticQuiz();
+    if (result === "passed") {
+      state.quizAutoPhase = "completed";
+      state.quizMessage = "测验已通过，正在进入下一项学习";
+      state.quizError = "";
+      setStatus(state.quizMessage);
+      updateQuizDisplay(true);
+      await advanceCompletedQuiz();
+      return;
+    }
+    if (result === "navigated") {
+      state.quizAutoPhase = "completed";
+      setStatus("测验已提交，平台已进入下一页");
+      return;
+    }
+    if (result === "failed") {
+      await stopAutomaticQuiz("本次测验未通过，请检查模型配置或答案后重试");
+      return;
+    }
+    if (result === "missing-submit") {
+      await stopAutomaticQuiz("没有找到平台的提交答案按钮");
+      return;
+    }
+    await stopAutomaticQuiz("提交后未能识别测验结果，请检查页面状态");
+  }
+
+  async function handleAiQuizPage() {
     const questions = extractQuizQuestions();
     if (!questions.length) {
       setStatus("检测到做题页面，等待题目加载");
@@ -863,23 +1089,14 @@
       state.panelOpen = true;
       state.rootEl?.classList.add("open");
     }
+    updateQuizDisplay(true);
+    if (state.settings.aiQuizAutoSubmit) {
+      await runAutomaticQuiz(fingerprint, questions);
+      return;
+    }
     if (!state.quizBusy && !state.quizAnswers.length && !state.quizError) {
       setStatus(`检测到 ${questions.length} 道题，等待你启动 AI 分析`);
     }
-    updateQuizDisplay(true);
-  }
-
-  function quizResultComplete() {
-    const feedbackTexts = [...document.querySelectorAll("div, p, span, h1, h2, h3, h4")]
-      .filter((el) => visible(el) && !state.rootEl?.contains(el))
-      .map((el) => textOf(el))
-      .filter((text) => text.length >= 2 && text.length <= 120);
-    if (feedbackTexts.some((text) => (
-      /^(?:恭喜(?:您)?[，,!！\s]*)?(?:本次)?(?:测验|考试|答题)(?:已)?(?:通过|完成|合格)(?=$|[\s，,。.!！：:])/.test(text) ||
-      /^提交成功/.test(text)
-    ))) return true;
-    const body = bodyText();
-    return /重新答题/.test(body) && /得分|成绩|正确率/.test(body);
   }
 
   async function advanceCompletedQuiz() {
@@ -888,7 +1105,34 @@
       clickElement(next, `测验已完成，进入下一项：${titleFromText(textOf(next))}`);
       return;
     }
+    const requirement = await courseTimeRequirement();
+    if (!requirement.satisfied) {
+      await supplementCourseTime(requirement);
+      return;
+    }
     await returnToCatalog("测验已完成，返回课程列表");
+  }
+
+  async function handleQuestionPage() {
+    if (state.settings.aiQuizEnabled) {
+      const result = quizResultStatus();
+      if (result === "passed") {
+        await advanceCompletedQuiz();
+        return;
+      }
+      if (result === "failed") {
+        if (state.settings.aiQuizAutoSubmit) {
+          await stopAutomaticQuiz("本次测验未通过，请检查模型配置或答案后重试");
+        } else {
+          setStatus("测验未通过，等待你重新答题");
+        }
+        return;
+      }
+      await handleAiQuizPage();
+      return;
+    }
+    if (state.settings.skipQuestions) await skipQuestionPage();
+    else setStatus("检测到做题页面，等待人工处理");
   }
 
   function injectStyleFix() {
@@ -1579,10 +1823,7 @@
     liveVideos.forEach(applySpeed);
 
     if (pageLooksQuestion()) {
-      if (state.settings.aiQuizEnabled && quizResultComplete()) await advanceCompletedQuiz();
-      else if (state.settings.aiQuizEnabled) handleAiQuizPage();
-      else if (state.settings.skipQuestions) await skipQuestionPage();
-      else setStatus("检测到做题页面，等待人工处理");
+      await handleQuestionPage();
       return;
     }
 
@@ -1654,10 +1895,7 @@
       }
 
       if (pageLooksQuestion()) {
-        if (state.settings.aiQuizEnabled && quizResultComplete()) await advanceCompletedQuiz();
-        else if (state.settings.aiQuizEnabled) handleAiQuizPage();
-        else if (state.settings.skipQuestions) await skipQuestionPage();
-        else setStatus("检测到做题页面，等待人工处理");
+        await handleQuestionPage();
       } else if (pageLooksCatalog()) {
         await handleCatalog();
       } else if (pageLooksContent()) {
@@ -2086,7 +2324,8 @@
         type: "password",
         placeholder: "输入 API Key；本地接口可留空"
       }),
-      settingRow("记住 API Key", "aiRememberApiKey")
+      settingRow("记住 API Key", "aiRememberApiKey"),
+      settingRow("全自动答题并提交", "aiQuizAutoSubmit")
     );
 
     const configActions = document.createElement("div");
@@ -2121,7 +2360,7 @@
     status.className = `${EXT_ID}-ai-config-status`;
     const note = document.createElement("div");
     note.className = `${EXT_ID}-ai-config-note`;
-    note.textContent = "只会发送课程标题、可见题干和选项；分析完成后由你决定是否填写与提交。";
+    note.textContent = "只会发送课程标题、可见题干和选项；全自动模式会填写、提交，并在通过后继续学习。";
     config.append(configActions, status, note);
     return config;
   }
@@ -2150,13 +2389,13 @@
       settingRow("自动播放", "autoPlay"),
       settingRow("未完成自动补学", "recoverOnUnconfirmedEnd"),
       settingRow("总时长达标再返回", "enforceCourseTotalTime"),
-      settingRow("AI 答题辅助", "aiQuizEnabled"),
+      settingRow("AI 自动答题", "aiQuizEnabled"),
       settingRow("跳过做题页", "skipQuestions")
     );
 
     const note = document.createElement("div");
     note.className = `${EXT_ID}-settings-note`;
-    note.textContent = "AI 答题辅助与跳过做题页互斥；视频仍按平台规则固定以 1x 播放。";
+    note.textContent = "AI 答题与跳过做题页互斥；全自动模式失败时会停止学习，避免重复提交。";
 
     back.append(bar, list, buildAiConfig(), note);
     return back;
@@ -2233,10 +2472,12 @@
     const trusted = document.querySelector(`#${EXT_ID}-quiz-apply-trusted`);
     const all = document.querySelector(`#${EXT_ID}-quiz-apply-all`);
     const list = document.querySelector(`#${EXT_ID}-quiz-results`);
-    if (!count || !message || !error || !analyze || !actions || !trusted || !all || !list) return;
+    const note = document.querySelector(`#${EXT_ID}-quiz-note`);
+    if (!count || !message || !error || !analyze || !actions || !trusted || !all || !list || !note) return;
 
     const valid = state.quizAnswers.filter((answer) => answer.valid);
     const trustedCount = valid.filter((answer) => answer.confidence >= AI_QUIZ_CONFIDENCE_THRESHOLD).length;
+    const automatic = Boolean(state.settings.aiQuizAutoSubmit);
     count.textContent = `${liveQuestions.length || state.quizQuestions.length} 题`;
     message.textContent = state.quizMessage || (
       normalize(String(state.settings.aiModel || ""))
@@ -2245,18 +2486,24 @@
     );
     error.hidden = !state.quizError;
     error.textContent = state.quizError;
+    analyze.hidden = automatic;
     analyze.disabled = state.quizBusy;
     analyze.textContent = state.quizBusy ? "AI 分析中…" : (state.quizAnswers.length ? "重新分析" : "AI 分析题目");
-    actions.hidden = !valid.length;
+    actions.hidden = automatic || !valid.length;
     trusted.disabled = state.quizBusy || !trustedCount;
     trusted.textContent = `应用高置信答案 (${trustedCount})`;
     all.disabled = state.quizBusy || !valid.length;
     all.textContent = `应用全部有效答案 (${valid.length})`;
+    note.textContent = automatic
+      ? "全自动模式会填写全部有效答案并提交；分析或页面操作失败时自动停止，最多请求模型 2 次。"
+      : "手动模式会保留答案预览和回填按钮，提交继续使用平台原生按钮。";
 
     const signature = JSON.stringify({
       fingerprint: state.quizFingerprint,
       answers: state.quizAnswers,
-      busy: state.quizBusy
+      busy: state.quizBusy,
+      automatic,
+      phase: state.quizAutoPhase
     });
     if (!force && signature === state.quizRenderSignature) return;
     state.quizRenderSignature = signature;
@@ -2299,7 +2546,7 @@
     const header = document.createElement("div");
     header.className = `${EXT_ID}-quiz-header`;
     const title = document.createElement("span");
-    title.textContent = "AI 答题辅助";
+    title.textContent = "AI 自动答题";
     const count = document.createElement("span");
     count.id = `${EXT_ID}-quiz-count`;
     header.append(title, count);
@@ -2341,8 +2588,9 @@
     applyActions.append(applyTrusted, applyAll);
 
     const note = document.createElement("div");
+    note.id = `${EXT_ID}-quiz-note`;
     note.className = `${EXT_ID}-quiz-note`;
-    note.textContent = "AI 可能出错。填写后请检查页面选项，最终提交仍使用平台原生确认。";
+    note.textContent = "全自动模式会填写、提交，并在测验通过后继续学习。";
     section.append(header, message, error, analyze, results, applyActions, note);
     return section;
   }
@@ -2582,6 +2830,7 @@
           },
           quiz: {
             enabled: Boolean(state.settings.aiQuizEnabled),
+            autoSubmit: Boolean(state.settings.aiQuizAutoSubmit),
             detected: pageLooksQuestion(),
             questions: state.quizQuestions.length,
             answers: state.quizAnswers.map((answer) => ({
@@ -2591,6 +2840,9 @@
               valid: answer.valid
             })),
             busy: state.quizBusy,
+            phase: state.quizAutoPhase,
+            attempts: state.quizAutoAttempts,
+            submittedAt: state.quizSubmittedAt,
             error: state.quizError
           },
           nextCatalog: textOf(nextCatalogCourse()),

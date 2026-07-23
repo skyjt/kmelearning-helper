@@ -19,7 +19,7 @@ const metadata = `// ==UserScript==
 // @name         KME 学习助手
 // @namespace    https://github.com/skyjt/kmelearning-helper
 // @version      ${manifest.version}
-// @description  自动按目录学习 KME 课程，并通过用户配置的大模型辅助完成可见测验。
+// @description  自动学习 KME 课程，并通过用户配置的大模型完成可见测验和后续课程。
 // @author       skyjt
 // @license      MIT
 // @homepageURL  https://github.com/skyjt/kmelearning-helper

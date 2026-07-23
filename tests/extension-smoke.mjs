@@ -325,9 +325,14 @@ const quizHtml = String.raw`<!doctype html>
     .question-title { margin-bottom: 12px; font-weight: 600; }
     label { display: flex; align-items: center; min-height: 30px; gap: 8px; cursor: pointer; }
     #quiz-submit { margin-top: 24px; }
+    .course-main-sidebar { display: flex; gap: 12px; margin: 16px 24px; }
   </style>
 </head>
 <body>
+<aside class="course-main-sidebar">
+  <button id="quiz-lesson" class="item active" type="button">AI 测验课程</button>
+  <button id="next-lesson" class="item" type="button">下一章课程</button>
+</aside>
 <main>
   <h1>AI 测验课程</h1>
   <section class="course-main-content">
@@ -353,6 +358,11 @@ const quizHtml = String.raw`<!doctype html>
       </div>
     </div>
     <button id="quiz-submit" type="button">提交答案</button>
+    <div id="quiz-result" style="display:none">本次测验已通过</div>
+  </section>
+  <section id="next-content" style="display:none">
+    <h1>下一章课程</h1>
+    <p>学习材料加载完成</p>
   </section>
 </main>
 <div id="quiz-notice" role="dialog">
@@ -361,8 +371,17 @@ const quizHtml = String.raw`<!doctype html>
   <span>共 3 题，请检查答案后提交。</span>
   <button id="quiz-notice-close" type="button">我知道了</button>
 </div>
+<div id="quiz-confirm" role="dialog" style="display:none">
+  <strong>交卷提醒：确定交卷？交卷后不可撤回。</strong>
+  <button type="button">取消</button>
+  <button id="quiz-confirm-submit" type="button">确定交卷</button>
+</div>
 <script>
   window.__mockQuizSubmitCount = 0;
+  window.__mockQuizConfirmCount = 0;
+  window.__mockQuizNoticeCloseCount = 0;
+  window.__mockNextLessonCount = 0;
+  window.__mockSubmittedSelections = [];
   window.__mockAiResponse = ${JSON.stringify(String.raw`\`\`\`json
 {
   "answers": [
@@ -374,9 +393,29 @@ const quizHtml = String.raw`<!doctype html>
 \`\`\``)};
   document.getElementById("quiz-submit").addEventListener("click", () => {
     window.__mockQuizSubmitCount += 1;
+    document.getElementById("quiz-confirm").style.display = "block";
   });
   document.getElementById("quiz-notice-close").addEventListener("click", () => {
+    window.__mockQuizNoticeCloseCount += 1;
     document.getElementById("quiz-notice").style.display = "none";
+  });
+  document.getElementById("quiz-confirm-submit").addEventListener("click", () => {
+    window.__mockQuizConfirmCount += 1;
+    window.__mockSubmittedSelections = [...document.querySelectorAll("[data-question]")]
+      .map((group) => [...group.querySelectorAll("input")].map((input) => input.checked));
+    document.getElementById("quiz-confirm").style.display = "none";
+    document.getElementById("quiz-result").textContent = "恭喜您通过本次测验";
+    document.getElementById("quiz-result").style.display = "block";
+  });
+  document.getElementById("next-lesson").addEventListener("click", () => {
+    window.__mockNextLessonCount += 1;
+    document.querySelector(".course-main-content")?.remove();
+    document.getElementById("quiz-notice")?.remove();
+    document.getElementById("quiz-confirm")?.remove();
+    document.getElementById("next-content").style.display = "block";
+    document.getElementById("quiz-lesson").className = "item";
+    document.getElementById("quiz-lesson").textContent = "AI 测验课程 已完成";
+    document.getElementById("next-lesson").className = "item active";
   });
 </script>
 </body>
@@ -638,6 +677,7 @@ try {
   await quizPage.evaluate((currentTarget) => {
     const settings = {
       aiQuizEnabled: true,
+      aiQuizAutoSubmit: false,
       skipQuestions: false,
       aiEndpoint: "https://mock-ai.example/v1/chat/completions",
       aiModel: "mock-answer-model",
@@ -654,7 +694,7 @@ try {
     panel: document.querySelector("#kme-learning-navigator")?.innerText || "",
     inspect: window.__kmeLearningNavigator?.inspect?.()
   }));
-  if (!quizInitial.panel.includes("AI 答题辅助") || quizInitial.inspect?.quiz?.detected !== true) {
+  if (!quizInitial.panel.includes("AI 自动答题") || quizInitial.inspect?.quiz?.detected !== true) {
     throw new Error(`quiz assistant detection failed: ${JSON.stringify(quizInitial)}`);
   }
 
@@ -666,13 +706,14 @@ try {
     keyType: document.querySelector('[data-kme-learning-navigator-ai-field="aiApiKey"]')?.type,
     keyValue: document.querySelector('[data-kme-learning-navigator-ai-field="aiApiKey"]')?.value,
     aiEnabled: document.querySelector('[data-kme-learning-navigator-setting="aiQuizEnabled"]')?.checked,
+    autoSubmit: document.querySelector('[data-kme-learning-navigator-setting="aiQuizAutoSubmit"]')?.checked,
     skipQuestions: document.querySelector('[data-kme-learning-navigator-setting="skipQuestions"]')?.checked
   }));
   if (quizConfig.endpoint !== "https://mock-ai.example/v1/chat/completions" ||
       quizConfig.model !== "mock-answer-model" ||
       quizConfig.keyType !== "password" ||
       quizConfig.keyValue !== "" ||
-      !quizConfig.aiEnabled || quizConfig.skipQuestions) {
+      !quizConfig.aiEnabled || quizConfig.autoSubmit || quizConfig.skipQuestions) {
     throw new Error(`quiz AI config UI failed: ${JSON.stringify(quizConfig)}`);
   }
   await quizPage.locator('[data-kme-learning-navigator-setting="skipQuestions"]').click();
@@ -792,6 +833,107 @@ try {
     throw new Error(`quiz malformed-response guard failed: ${JSON.stringify(quizErrorState)}`);
   }
 
+  const autoQuizPage = await context.newPage();
+  await autoQuizPage.goto("https://pc.kmelearning.com/jsncxyslhs/home/course/quiz-ai-auto");
+  await autoQuizPage.evaluate((currentTarget) => {
+    const settings = {
+      aiQuizEnabled: true,
+      aiQuizAutoSubmit: true,
+      skipQuestions: false,
+      aiEndpoint: "https://mock-ai.example/v1/chat/completions",
+      aiModel: "mock-answer-model",
+      aiRememberApiKey: true,
+      aiApiKey: "test-only-key"
+    };
+    if (currentTarget === "userscript") Object.assign(window.__mockUserscriptStorage, settings);
+    else Object.assign(window.__mockChromeStorage, settings);
+  }, target);
+  await injectHelper(autoQuizPage);
+  await autoQuizPage.waitForSelector("#kme-learning-navigator-quiz", { state: "visible", timeout: 5000 });
+  const autoModeUi = await autoQuizPage.evaluate(() => ({
+    enabled: document.querySelector('[data-kme-learning-navigator-setting="aiQuizAutoSubmit"]')?.checked,
+    analyzeHidden: document.querySelector("#kme-learning-navigator-quiz-analyze")?.hidden,
+    inspect: window.__kmeLearningNavigator?.inspect?.()
+  }));
+  if (!autoModeUi.enabled || !autoModeUi.analyzeHidden || autoModeUi.inspect?.quiz?.autoSubmit !== true) {
+    throw new Error(`automatic quiz mode UI failed: ${JSON.stringify(autoModeUi)}`);
+  }
+  await autoQuizPage.locator(".kme-learning-navigator-primary").click();
+  await autoQuizPage.waitForFunction(() => window.__mockNextLessonCount === 1, undefined, { timeout: 15000 });
+  const autoQuizState = await autoQuizPage.evaluate(() => ({
+    inspect: window.__kmeLearningNavigator.inspect(),
+    requests: window.__mockModelRequests.length,
+    noticeCloseCount: window.__mockQuizNoticeCloseCount,
+    submitCount: window.__mockQuizSubmitCount,
+    confirmCount: window.__mockQuizConfirmCount,
+    nextLessonCount: window.__mockNextLessonCount,
+    selections: window.__mockSubmittedSelections
+  }));
+  const expectedAutoSelections = [
+    [false, true, false, false],
+    [true, false, true, false],
+    [true, false]
+  ];
+  if (autoQuizState.requests !== 1 ||
+      autoQuizState.noticeCloseCount !== 1 ||
+      autoQuizState.submitCount !== 1 ||
+      autoQuizState.confirmCount !== 1 ||
+      autoQuizState.nextLessonCount !== 1 ||
+      JSON.stringify(autoQuizState.selections) !== JSON.stringify(expectedAutoSelections) ||
+      autoQuizState.inspect?.quiz?.phase !== "completed" ||
+      autoQuizState.inspect?.running !== true) {
+    throw new Error(`automatic quiz pipeline failed: ${JSON.stringify(autoQuizState)}`);
+  }
+  await autoQuizPage.waitForTimeout(2600);
+  const autoQuizNoRepeat = await autoQuizPage.evaluate(() => ({
+    requests: window.__mockModelRequests.length,
+    submitCount: window.__mockQuizSubmitCount,
+    confirmCount: window.__mockQuizConfirmCount,
+    nextLessonCount: window.__mockNextLessonCount
+  }));
+  if (Object.values(autoQuizNoRepeat).some((count) => count !== 1)) {
+    throw new Error(`automatic quiz repeated an action: ${JSON.stringify(autoQuizNoRepeat)}`);
+  }
+
+  const autoQuizFailurePage = await context.newPage();
+  await autoQuizFailurePage.goto("https://pc.kmelearning.com/jsncxyslhs/home/course/quiz-ai-auto-failure");
+  await autoQuizFailurePage.evaluate((currentTarget) => {
+    const settings = {
+      aiQuizEnabled: true,
+      aiQuizAutoSubmit: true,
+      skipQuestions: false,
+      aiEndpoint: "https://mock-ai.example/v1/chat/completions",
+      aiModel: "mock-answer-model",
+      aiRememberApiKey: true,
+      aiApiKey: "test-only-key"
+    };
+    if (currentTarget === "userscript") Object.assign(window.__mockUserscriptStorage, settings);
+    else Object.assign(window.__mockChromeStorage, settings);
+  }, target);
+  await injectHelper(autoQuizFailurePage);
+  await autoQuizFailurePage.waitForSelector("#kme-learning-navigator-quiz", { state: "visible", timeout: 5000 });
+  await autoQuizFailurePage.evaluate(() => { window.__mockAiResponse = "model returned plain text"; });
+  await autoQuizFailurePage.locator(".kme-learning-navigator-primary").click();
+  await autoQuizFailurePage.waitForFunction(() => {
+    const inspect = window.__kmeLearningNavigator?.inspect?.();
+    return inspect?.quiz?.phase === "failed" && inspect?.running === false;
+  }, undefined, { timeout: 15000 });
+  const autoQuizFailure = await autoQuizFailurePage.evaluate(() => ({
+    inspect: window.__kmeLearningNavigator.inspect(),
+    requests: window.__mockModelRequests.length,
+    submitCount: window.__mockQuizSubmitCount,
+    confirmCount: window.__mockQuizConfirmCount,
+    nextLessonCount: window.__mockNextLessonCount
+  }));
+  if (!autoQuizFailure.inspect.quiz.error.includes("JSON") ||
+      autoQuizFailure.inspect.quiz.attempts !== 2 ||
+      autoQuizFailure.requests !== 2 ||
+      autoQuizFailure.submitCount !== 0 ||
+      autoQuizFailure.confirmCount !== 0 ||
+      autoQuizFailure.nextLessonCount !== 0) {
+    throw new Error(`automatic quiz failure guard failed: ${JSON.stringify(autoQuizFailure)}`);
+  }
+
   console.log(JSON.stringify({
     ok: true,
     target,
@@ -818,6 +960,14 @@ try {
       lowConfidenceRows: quizAnalyzed.lowConfidenceRows,
       submitCount: quizFinal.submitCount,
       malformedResponseGuard: Boolean(quizErrorState.error)
+    },
+    automaticQuiz: {
+      requests: autoQuizState.requests,
+      submitCount: autoQuizState.submitCount,
+      confirmCount: autoQuizState.confirmCount,
+      nextLessonCount: autoQuizState.nextLessonCount,
+      noRepeat: Object.values(autoQuizNoRepeat).every((count) => count === 1),
+      failureAttempts: autoQuizFailure.requests
     },
     currentPage: "电子邮件安全"
   }, null, 2));
