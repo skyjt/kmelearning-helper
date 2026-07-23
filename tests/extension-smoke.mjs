@@ -232,26 +232,22 @@ const timeShortHtml = String.raw`<!doctype html>
 <main>
   <button id="back">返回</button>
   <section class="course-wrap">
-    <header><strong>补学课程</strong><span> 收藏 </span><span>1学时</span></header>
+    <header><strong>补学课程</strong><span> 收藏 </span><span>1学时</span><span>已完成</span></header>
     <div class="course-main-wrap">
       <div class="course-main-area">
         <video id="mock-video"></video>
       </div>
       <aside class="root__mZMt4">
         <nav>
-          <button class="ant5-tabs-tab-btn ant5-tabs-tab-active">目录</button>
-          <button class="ant5-tabs-tab-btn">记录</button>
+          <button id="directory-tab" class="ant5-tabs-tab-btn">目录</button>
+          <button id="record-tab" class="ant5-tabs-tab-btn ant5-tabs-tab-active">记录</button>
           <button class="ant5-tabs-tab-btn">评论</button>
         </nav>
-        <div class="scrollBody__Jdo84">
-          <div class="lesson-item active">
-            <span>补学课程 00:32:16</span>
-            <span class="anticon5-check" data-icon="check">✓</span>
-          </div>
+        <div id="course-tab-content" class="scrollBody__Jdo84">
           <div class="course-records-root__WU_lB">
-            <div>学习次数 6</div>
-            <div>学习总时长 00:32:23</div>
-            <div>开始时间 持续时间</div>
+            <div>学习次数 0</div>
+            <div>学习总时长 00:00:00</div>
+            <div>空空如也~</div>
           </div>
         </div>
       </aside>
@@ -261,6 +257,7 @@ const timeShortHtml = String.raw`<!doctype html>
 <script>
   window.__mockReplayCount = 0;
   window.__mockBackCount = 0;
+  window.__mockRecordRefreshCount = 0;
   window.__mockPaused = true;
   window.__mockEnded = true;
   window.__mockCurrentTime = 1936;
@@ -281,6 +278,32 @@ const timeShortHtml = String.raw`<!doctype html>
   video.pause = () => {
     window.__mockPaused = true;
   };
+  const directoryTab = document.getElementById("directory-tab");
+  const recordTab = document.getElementById("record-tab");
+  const tabContent = document.getElementById("course-tab-content");
+  function activateTab(activeTab) {
+    [directoryTab, recordTab].forEach((tab) => {
+      tab.classList.toggle("ant5-tabs-tab-active", tab === activeTab);
+    });
+  }
+  directoryTab.addEventListener("click", () => {
+    activateTab(directoryTab);
+    tabContent.innerHTML = '<div class="lesson-item active"><span>补学课程 00:32:16</span>' +
+      '<span class="anticon5-check" data-icon="check">✓</span></div>';
+  });
+  recordTab.addEventListener("click", () => {
+    window.__mockRecordRefreshCount += 1;
+    activateTab(recordTab);
+    tabContent.innerHTML = '<div class="course-records-root__WU_lB">' +
+      '<div>学习次数 0</div><div>学习总时长 00:00:00</div>' +
+      '<div class="ant5-spin-spinning" aria-busy="true">加载中</div></div>';
+    window.setTimeout(() => {
+      if (!recordTab.classList.contains("ant5-tabs-tab-active")) return;
+      tabContent.innerHTML = '<div class="course-records-root__WU_lB">' +
+        '<div>学习次数 6</div><div>学习总时长 00:32:23</div>' +
+        '<div>开始时间 持续时间</div></div>';
+    }, 650);
+  });
   document.getElementById("back").addEventListener("click", () => {
     window.__mockBackCount += 1;
   });
@@ -482,6 +505,7 @@ try {
   const timeState = await timePage.evaluate(() => ({
     replayCount: window.__mockReplayCount,
     backCount: window.__mockBackCount,
+    recordRefreshCount: window.__mockRecordRefreshCount,
     currentTime: window.__mockCurrentTime,
     status: document.querySelector("#kme-learning-navigator-status")?.innerText || "",
     summary: document.querySelector("#kme-learning-navigator-summary")?.innerText || "",
@@ -495,6 +519,9 @@ try {
   }
   if (timeState.inspect?.timeRequirement?.requiredSeconds !== 3600) {
     throw new Error(`time requirement parse failed: ${JSON.stringify(timeState)}`);
+  }
+  if (timeState.recordRefreshCount < 1 || timeState.inspect?.timeRequirement?.learnedSeconds !== 1943) {
+    throw new Error(`stale course record refresh failed: ${JSON.stringify(timeState)}`);
   }
 
   console.log(JSON.stringify({
@@ -512,6 +539,7 @@ try {
     log: finalState.log,
     timeShort: {
       replayCount: timeState.replayCount,
+      recordRefreshCount: timeState.recordRefreshCount,
       requiredSeconds: timeState.inspect.timeRequirement.requiredSeconds,
       learnedSeconds: timeState.inspect.timeRequirement.learnedSeconds
     },

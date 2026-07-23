@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         KME 学习助手
 // @namespace    https://github.com/skyjt/kmelearning-helper
-// @version      2.7.0
+// @version      2.7.1
 // @description  自动按目录学习 KME 课程，并等待平台确认完成后继续下一门。
 // @author       skyjt
 // @license      MIT
@@ -91,6 +91,7 @@
     docScrollAt: 0
   };
   const TIME_REQUIREMENT_TOLERANCE_SECONDS = 20;
+  const COURSE_RECORD_REFRESH_WAIT_MS = 4500;
   const DEFAULTS = {
     running: false,
     autoPlay: true,
@@ -664,15 +665,15 @@
     return { seconds: 0, source: "" };
   }
 
-  function learnedTotalSeconds() {
-    const body = bodyText();
-    const direct = body.match(/学习总时长\s*([0-9:：]{4,})/);
-    if (direct) return parseClockToSeconds(direct[1]);
+  function courseRecordRoot() {
+    return [...document.querySelectorAll("[class*='course-records'], [class*='courseRecords'], [class*='record-list'], [class*='RecordList'], [class*='record'], [class*='Record'], .scrollBody__Jdo84")]
+      .find((el) => visible(el) && /学习总时长|学习次数|空空如也/.test(textOf(el))) || null;
+  }
 
-    const recordRoot = [...document.querySelectorAll("[class*='course-records'], [class*='record'], [class*='Record'], .scrollBody__Jdo84")]
-      .find((el) => visible(el) && /学习总时长/.test(textOf(el)));
-    if (!recordRoot) return 0;
-    const recordMatch = textOf(recordRoot).match(/学习总时长\s*([0-9:：]{4,})/);
+  function learnedTotalSeconds() {
+    const recordRoot = courseRecordRoot();
+    const recordText = recordRoot ? textOf(recordRoot) : bodyText();
+    const recordMatch = recordText.match(/学习总时长\s*([0-9:：]{4,})/);
     return recordMatch ? parseClockToSeconds(recordMatch[1]) : 0;
   }
 
@@ -681,15 +682,76 @@
       .find((el) => visible(el) && textOf(el) === label);
   }
 
+  function tabActive(tab) {
+    return Boolean(tab) && (
+      /active|selected/i.test(String(tab.className || "")) ||
+      /active|selected/i.test(String(tab.parentElement?.className || "")) ||
+      tab.getAttribute("aria-selected") === "true" ||
+      tab.parentElement?.getAttribute("aria-selected") === "true"
+    );
+  }
+
   async function switchCourseTab(label) {
     const tab = exactTab(label);
     if (!tab) return false;
-    const active = /active|selected/i.test(String(tab.className || "")) ||
-      /active|selected/i.test(String(tab.parentElement?.className || ""));
-    if (active) return true;
+    if (tabActive(tab)) return true;
     if (!clickElement(tab, `切换到${label}，检查学习时长`)) return false;
     await sleep(1500);
     return true;
+  }
+
+  function courseRecordLoading(recordRoot = courseRecordRoot()) {
+    const recordTab = exactTab("记录");
+    const scopes = dedupeElements([
+      recordRoot,
+      recordRoot?.parentElement,
+      recordTab?.closest("aside"),
+      recordTab?.parentElement?.parentElement
+    ].filter(Boolean));
+    const selector = ".ant5-spin-spinning, .ant-spin-spinning, [class*='spin-spinning'], [class*='Spin-spinning'], [aria-busy='true']";
+    return scopes.some((scope) => {
+      if (scope.matches?.(selector) && visible(scope)) return true;
+      return [...scope.querySelectorAll(selector)].some(visible);
+    });
+  }
+
+  async function waitForCourseRecordLoad(previousLearned) {
+    const startedAt = now();
+    let learned = 0;
+    while (now() - startedAt < COURSE_RECORD_REFRESH_WAIT_MS) {
+      invalidateScans();
+      const recordRoot = courseRecordRoot();
+      const recordText = recordRoot ? textOf(recordRoot) : "";
+      learned = learnedTotalSeconds();
+      const hasSummary = /学习总时长\s*[0-9:：]{4,}/.test(recordText);
+      const refreshed = learned > 0 && learned !== previousLearned;
+      if (recordRoot && hasSummary && !courseRecordLoading(recordRoot) && refreshed) {
+        return learned;
+      }
+      await sleep(300);
+    }
+
+    invalidateScans();
+    return learnedTotalSeconds();
+  }
+
+  async function refreshCourseRecords() {
+    const recordTab = exactTab("记录");
+    if (!recordTab) return learnedTotalSeconds();
+
+    const previousLearned = learnedTotalSeconds();
+    setStatus("正在刷新平台学习记录，等待最新总时长");
+    if (tabActive(recordTab)) {
+      const resetTab = exactTab("目录") || exactTab("评论");
+      if (resetTab) {
+        await runtimePatch({ lastTargetKey: "", lastTargetAt: 0 });
+        if (clickElement(resetTab, "重新载入学习记录")) await sleep(600);
+      }
+    }
+
+    await runtimePatch({ lastTargetKey: "", lastTargetAt: 0 });
+    if (!await switchCourseTab("记录")) return learnedTotalSeconds();
+    return waitForCourseRecordLoad(previousLearned);
   }
 
   async function courseTimeRequirement() {
@@ -705,10 +767,7 @@
     }
 
     let learned = learnedTotalSeconds();
-    if (!learned && exactTab("记录")) {
-      await switchCourseTab("记录");
-      learned = learnedTotalSeconds();
-    }
+    if (exactTab("记录")) learned = await refreshCourseRecords();
 
     const deficit = Math.max(0, required.seconds - learned);
     const satisfied = deficit <= TIME_REQUIREMENT_TOLERANCE_SECONDS;
