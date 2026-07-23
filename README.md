@@ -1,7 +1,12 @@
 # KME 学习助手（kmelearning-helper）
 
 > 一个给 `pc.kmelearning.com` 学习页用的自动学习助手，提供 Chrome 扩展（Manifest V3）和油猴脚本两个版本。
-> 它会在页面右下角放一个“学习助手”浮窗，登录后列出「我的任务」中的待学项目；经你确认后进入对应项目，按目录顺序自动播放课程、等平台确认完成，再调用你配置的大模型完成测验并继续下一门课程。
+> 它会在页面右下角放一个“学习助手”浮窗，登录后列出「我的任务」中的待学项目；经你确认后进入对应项目，按目录顺序自动播放课程、等待平台确认完成，并按你的设置跳过做题页或调用大模型完成测验。
+
+[下载最新版](https://github.com/skyjt/kmelearning-helper/releases/latest) ·
+[油猴一键安装](https://raw.githubusercontent.com/skyjt/kmelearning-helper/main/userscript/kme-learning-helper.user.js) ·
+[详细安装说明](INSTALL.md) ·
+[完整更新日志](CHANGELOG.md)
 
 ---
 
@@ -53,35 +58,43 @@
 
 ---
 
-## 快速开始
+## 最近几个版本更新
+
+| 版本 | 主要变化 | 使用时会看到什么 |
+| --- | --- | --- |
+| **v2.10.x** | 统一“项目 / 课程 / 小节”层级，精简首页浮窗，并补齐“测试题”目录识别 | 首页直接选择待学项目；需要重扫时点标题栏的「刷新」；视频结束后可继续进入名称含“测试题”的测验 |
+| **v2.9.x** | 增加全自动答题、提交与通过后续学流程，优化异步结果判断 | AI 可自动关闭须知、答题、确认提交；结果页会等到明确成绩后再继续 |
+| **v2.8.x** | 增加 OpenAI-compatible 模型配置、连接测试和手动回填 | 可以先预览答案与置信度，再选择回填高置信答案或全部有效答案 |
+| **v2.7.x** | 增加首页待学项目检测和自动进入流程，刷新记录后再校验学习时长 | 从平台首页选一次项目即可开始；课程结束时会读取最新学习记录，减少重复补学 |
+| **v2.6.0** | 增加油猴脚本版本，并让两种版本共用核心与双版本测试 | 可以直接安装 `.user.js`；Chrome 版与油猴版保持同一套功能 |
+
+完整的逐版本修复与变更见 [CHANGELOG.md](CHANGELOG.md)。
+
+---
+
+## 快速开始：从安装到运行
 
 ### 1. 选择安装方式
 
 **方式一：油猴脚本（推荐）**
 
 1. 先安装 [Tampermonkey](https://www.tampermonkey.net/) 等用户脚本管理器。
-2. 点击 [安装 KME 学习助手油猴版](https://raw.githubusercontent.com/skyjt/kmelearning-helper/main/userscript/kme-learning-helper.user.js)。
+2. 点击 [一键安装 KME 学习助手油猴版](https://raw.githubusercontent.com/skyjt/kmelearning-helper/main/userscript/kme-learning-helper.user.js)。
 3. 在脚本管理器打开的安装页确认安装。
 4. 打开或刷新 `https://pc.kmelearning.com/` 学习页面。
 
-油猴版会跟随仓库里的版本号检查更新，核心功能和 Chrome 扩展保持一致。
+也可以到 [最新 Release](https://github.com/skyjt/kmelearning-helper/releases/latest) 下载 `kme-learning-helper.user.js`。如果浏览器只保存了文件，请在 Tampermonkey 的「实用工具」中从文件导入。
+
+油猴版会通过脚本管理器检查更新，核心功能和 Chrome 扩展保持一致。
 
 **方式二：Chrome 扩展**
 
-下载 ZIP：
-
-1. 打开 GitHub 仓库页 → 点 `Code` → `Download ZIP`，下载后解压。
+1. 下载最新版 [`kme-learning-helper-chrome.zip`](https://github.com/skyjt/kmelearning-helper/releases/latest/download/kme-learning-helper-chrome.zip)，并解压到一个固定文件夹。
 2. Chrome 地址栏进入 `chrome://extensions`。
 3. 打开右上角的 **开发者模式**。
 4. 点 **加载已解压的扩展程序**，选中解压后的文件夹（里面要有 `manifest.json`）。
 
-也可以用 Git 克隆：
-
-```bash
-git clone https://github.com/skyjt/kmelearning-helper.git
-```
-
-然后同样在 `chrome://extensions` 里 **加载已解压的扩展程序**，选中克隆下来的目录。
+ZIP 不能直接加载，必须先解压。更新 Chrome 版时，下载并解压新包替换原文件，再回到 `chrome://extensions` 点击扩展卡片上的刷新按钮。
 
 > 同一个浏览器请只启用一个版本，避免运行状态和设置来源混淆。
 
@@ -89,12 +102,23 @@ git clone https://github.com/skyjt/kmelearning-helper.git
 
 1. 登录 `pc.kmelearning.com`，回到首页。
 2. 学习助手会自动展开，并列出「我的任务」中的待学项目。
-3. 点击准备学习的项目，在提示中点 **确认开始**。
-4. 保持标签页打开，助手会自动进入项目和课程目录，再按“播完 → 返回 → 下一门”的顺序往下学。
+3. 如果列表没有及时更新，点「待学项目」右侧的 **刷新**。
+4. 点击准备学习的项目，在提示中点 **确认开始**。
+5. 保持标签页打开，助手会自动进入项目和课程目录，再按“播完 → 校验学习时长 → 测验或跳过 → 下一门”的顺序往下学。
 
 也可以直接进入某个课程目录页，再点 **开始自动学习**，继续使用原有的目录学习方式。
 
 > 💡 浮窗可以最小化成右下角的小图标，点一下或鼠标移上去就能展开。
+
+### 3. 选择做题方式
+
+| 想要的方式 | 设置方法 | 运行结果 |
+| --- | --- | --- |
+| **暂时跳过做题页**（默认） | 保持「跳过做题页」开启 | 自动略过考试、测验、问卷和作业，继续处理可学习内容 |
+| **AI 辅助、人工确认** | 开启「AI 自动答题」，关闭「全自动答题并提交」 | 模型给出答案、置信度和理由；你选择回填范围并自行提交 |
+| **AI 全自动答题** | 开启「AI 自动答题」和「全自动答题并提交」 | 自动分析、回填、提交；通过后继续下一项，异常时停止并显示原因 |
+
+「AI 自动答题」和「跳过做题页」互斥。第一次配置 AI 时，请先测试模型连接，再开始自动学习。
 
 ---
 
@@ -182,7 +206,7 @@ API Key 默认只保留到当前页面刷新；开启「记住 API Key」后才�
 
 ## 更新日志
 
-完整记录见 [CHANGELOG.md](CHANGELOG.md)。最近一次更新（**v2.10.1**）：修复课程目录中的“测试题”未进入后续导航候选，视频完成后现在会继续进入测试题页面。
+完整记录见 [CHANGELOG.md](CHANGELOG.md)。最近一次更新（**v2.10.1**）：修复课程目录中的“测试题”未进入后续导航候选，视频完成后现在会继续进入测试题页面。安装包和油猴脚本见 [GitHub Releases](https://github.com/skyjt/kmelearning-helper/releases/latest)。
 
 ---
 
@@ -190,6 +214,9 @@ API Key 默认只保留到当前页面刷新；开启「记住 API Key」后才�
 
 **浮窗没出现？**
 确认你在 `pc.kmelearning.com` 的学习页，并刷新一次页面。第一次安装后已打开的页面需要刷新才会注入。
+
+**首页为什么没有“开始自动学习”按钮？**
+v2.10.0 起，首页以“选择待学项目”作为开始入口。直接点项目并确认即可；标题栏的「刷新」用于重新检测项目。进入课程目录后仍会显示“开始自动学习”按钮。
 
 **学了一会儿停住了？**
 平台页面结构更新可能导致识别失效。先刷新页面重试；仍有问题再更新扩展代码。
@@ -200,8 +227,14 @@ API Key 默认只保留到当前页面刷新；开启「记住 API Key」后才�
 **AI 模型连接失败？**
 确认接口地址包含完整的 Chat Completions 路径、模型名称准确，并检查 API Key、账户额度和油猴弹出的域名授权。远程接口必须使用 HTTPS，本机接口可使用 `localhost` HTTP。
 
+**Chrome 版能连接自定义模型吗？**
+可以，但模型服务需要允许浏览器跨域请求（CORS）。油猴版通过用户脚本权限发起请求，对自定义模型地址的兼容性通常更好。
+
 **全自动答题为什么停住了？**
 浮窗会显示停止原因。常见原因包括图片题、模型两次都没有返回完整 JSON、页面选项写入失败、提交按钮未识别、测验未通过或提交结果超时。修正配置或人工处理后，再点“开始自动学习”重试。
+
+**怎样更新到新版本？**
+油猴版会由脚本管理器检查更新，也可以重新点击上方的一键安装链接。Chrome 版需要从 [最新 Release](https://github.com/skyjt/kmelearning-helper/releases/latest) 下载新 ZIP，解压替换原文件，再到扩展管理页点击刷新。
 
 **能配合倍速插件用吗？**
 不建议。平台会校验真实学习时长和心跳，倍速播完往往不算完成，反而拖慢进度。
@@ -221,8 +254,9 @@ npm run icons      # 重新生成图标
 
 ```bash
 mkdir -p dist
-zip -r "dist/kmelearning-helper-v$(node -p "require('./manifest.json').version").zip" \
-  manifest.json content.js styles.css icons README.md INSTALL.md LICENSE
+COPYFILE_DISABLE=1 zip -X -r dist/kme-learning-helper-chrome.zip \
+  manifest.json content.js styles.css icons
+cp userscript/kme-learning-helper.user.js dist/kme-learning-helper.user.js
 ```
 
 ### 文件结构

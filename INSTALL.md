@@ -2,26 +2,26 @@
 
 > 这是 KME 学习助手的安装与上手指南。想了解扩展功能和原理，请看 [README](README.md)。
 
-## 1. 获取项目（扩展版需要）
+## 1. 选择安装版本
 
-油猴版可以直接从下一节安装。使用 Chrome 扩展版时，先任选一种方式获取项目：
+两个版本功能一致，同一个浏览器只需安装其中一个：
 
-**方式一：下载 ZIP（推荐新手）**
+- **油猴脚本**：安装和更新更方便，自定义模型接口的兼容性更好，推荐大多数用户使用。
+- **Chrome 扩展**：无需用户脚本管理器，需要在开发者模式下加载解压后的扩展。
 
-在 GitHub 仓库页点 `Code` → `Download ZIP`，下载后解压。
+所有发布版本都在 [GitHub Releases](https://github.com/skyjt/kmelearning-helper/releases/latest)。Release 中的两个主要文件分别是：
 
-**方式二：Git 克隆**
-
-```bash
-git clone https://github.com/skyjt/kmelearning-helper.git
-```
+- `kme-learning-helper.user.js`：油猴脚本。
+- `kme-learning-helper-chrome.zip`：Chrome 扩展安装包。
 
 ## 2. 安装油猴版（推荐）
 
 1. 在浏览器中安装 [Tampermonkey](https://www.tampermonkey.net/) 等用户脚本管理器。
-2. 打开 [KME 学习助手油猴版安装地址](https://raw.githubusercontent.com/skyjt/kmelearning-helper/main/userscript/kme-learning-helper.user.js)。
+2. 打开 [KME 学习助手一键安装地址](https://raw.githubusercontent.com/skyjt/kmelearning-helper/main/userscript/kme-learning-helper.user.js)。
 3. 在脚本管理器显示的安装页点击「安装」。
 4. 打开或刷新 `https://pc.kmelearning.com/` 学习页面。
+
+也可以从 [最新 Release](https://github.com/skyjt/kmelearning-helper/releases/latest) 下载 `kme-learning-helper.user.js`。浏览器只保存文件时，请打开 Tampermonkey 管理面板，在「实用工具」中选择从文件导入。
 
 v2.8.0 起，油猴版可以访问用户配置的大模型接口。安装或更新时会显示跨域请求权限；真正请求新域名时，请核对并只允许你信任的模型服务。
 
@@ -29,28 +29,42 @@ v2.8.0 起，油猴版可以访问用户配置的大模型接口。安装或更�
 
 ## 3. 在 Chrome 中加载扩展版
 
-1. 地址栏进入 `chrome://extensions`。
-2. 打开右上角的 **开发者模式**。
-3. 点 **加载已解压的扩展程序**。
-4. 选中项目目录（里面要有 `manifest.json`）。
-5. 打开或刷新 `https://pc.kmelearning.com/` 学习页面。
+1. 下载最新版 [`kme-learning-helper-chrome.zip`](https://github.com/skyjt/kmelearning-helper/releases/latest/download/kme-learning-helper-chrome.zip)。
+2. 把 ZIP 解压到一个固定文件夹，确认文件夹内直接包含 `manifest.json`。
+3. 地址栏进入 `chrome://extensions`。
+4. 打开右上角的 **开发者模式**。
+5. 点 **加载已解压的扩展程序**，选择刚才解压的文件夹。
+6. 打开或刷新 `https://pc.kmelearning.com/` 学习页面。
 
 ✅ 安装成功后，页面右下角会出现 **“学习助手”** 浮窗。
 
 > 同一个浏览器请只启用油猴版或扩展版中的一个。两个版本的设置分别保存在各自的存储空间中。
 
+### 后续更新
+
+- 油猴版会由脚本管理器按 `@updateURL` 检查更新，也可以重新打开一键安装地址覆盖更新。
+- Chrome 版需要下载新的 ZIP，解压后替换原文件，再回到 `chrome://extensions` 点击扩展卡片上的刷新按钮。
+
 ## 4. 开始学习
 
 1. 登录平台并回到首页，学习助手会自动检测「我的任务」。
-2. 在浮窗中点击一个待学项目，再点 **确认开始**。
-3. 助手会自动进入项目详情、点击「进入学习」，再进入第一门未完成课程。
-4. 保持标签页打开，课程会按 1x 播放并等待平台完成标记；一门课学完后会继续下一门。
+2. 列表没有及时更新时，点「待学项目」右侧的 **刷新**。
+3. 在浮窗中点击一个待学项目，再点 **确认开始**。
+4. 助手会自动进入项目详情、点击「进入学习」，再进入第一门未完成课程。
+5. 保持标签页打开，课程会按 1x 播放并等待平台完成标记；一门课学完后会校验学习时长，并按设置处理测验和后续课程。
 
 已经进入课程目录时，也可以直接点浮窗里的 **开始自动学习**。
 
 > 💡 想调整行为（自动播放、跳过做题页等），点浮窗右上角的 **⚙**，卡片会翻转到背面的设置面，改完点「完成」翻回即可。
 
-## 5. 配置 AI 自动答题（可选，推荐油猴版）
+## 5. 选择测验处理方式
+
+- 默认开启 **跳过做题页**，遇到考试、测验、问卷或作业时会略过。
+- 开启 **AI 自动答题** 后，「跳过做题页」会自动关闭。
+- 关闭 **全自动答题并提交** 时，模型只提供答案预览和回填，由你确认并提交。
+- 开启 **全自动答题并提交** 时，助手会分析、回填、提交，并在通过后继续学习。
+
+## 6. 配置 AI 自动答题（可选，推荐油猴版）
 
 1. 点浮窗右上角 **⚙**，开启 **AI 自动答题**；「跳过做题页」会自动关闭。
 2. 填写完整的 OpenAI-compatible Chat Completions 接口地址、模型名称和 API Key。
