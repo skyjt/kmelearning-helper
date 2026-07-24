@@ -1,6 +1,6 @@
 {
   "name": "kmelearning-helper",
-  "version": "2.11.0",
+  "version": "2.11.1",
   "description": "Chrome MV3 and userscript helper for pc.kmelearning.com learning pages.",
   "type": "module",
   "scripts": {

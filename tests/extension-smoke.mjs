@@ -405,11 +405,13 @@ const quizHtml = String.raw`<!doctype html>
       .map((group) => [...group.querySelectorAll("input")].map((input) => input.checked));
     document.getElementById("quiz-confirm").style.display = "none";
     const result = document.getElementById("quiz-result");
-    result.textContent = "再考一次";
+    result.textContent = "本次测验未通过，再考一次";
     result.style.display = "block";
-    setTimeout(() => {
-      result.textContent = "恭喜您通过本次测验";
-    }, 800);
+    if (!location.pathname.includes("quiz-ai-auto-result-failure")) {
+      setTimeout(() => {
+        result.textContent = "恭喜您通过本次测验";
+      }, 800);
+    }
   });
   document.getElementById("next-lesson").addEventListener("click", () => {
     window.__mockNextLessonCount += 1;
@@ -421,6 +423,169 @@ const quizHtml = String.raw`<!doctype html>
     document.getElementById("quiz-lesson").textContent = "AI 测验课程 已完成";
     document.getElementById("next-lesson").className = "item active";
   });
+</script>
+</body>
+</html>`;
+
+const finalPassedQuizHtml = String.raw`<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>江苏农商联合银行</title>
+  <style>
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    main { min-height: 640px; padding: 24px; }
+    .course-main-sidebar { display: flex; gap: 12px; margin: 16px 24px; }
+    .item { padding: 10px 12px; }
+    .item.active { background: #eff5ff; }
+    .course-records-root__WU_lB { margin-top: 24px; }
+  </style>
+</head>
+<body>
+<section id="course-page" class="course-wrap">
+  <header><strong>《十五五》课程</strong><span> 收藏 </span><span>1学时</span><span>已完成</span></header>
+  <button id="back" type="button">返回</button>
+  <aside class="course-main-sidebar">
+    <div id="previous-video" class="item">《十五五》课程视频 00:50:47</div>
+    <div id="final-quiz" class="item active">《十五五》课程-测试题</div>
+  </aside>
+  <main>
+    <h1>《十五五》课程-测试题</h1>
+    <div id="course-reminder" role="dialog" style="display:none">
+      <strong>课程提醒</strong>
+      <span>你当前正在进行课程测验，是否确定关闭当前页面？</span>
+      <button type="button">取 消</button>
+      <button type="button">确 定</button>
+    </div>
+    <div>恭喜您通过本次测验</div>
+    <div>合格</div>
+    <div>95分</div>
+    <div>您可以继续学习课程内容或再考一次</div>
+    <button type="button">再考一次</button>
+    <div class="course-records-root__WU_lB">
+      <p>学习次数</p><p>3</p>
+      <p>学习总时长</p><p>00:50:50</p>
+    </div>
+  </main>
+</section>
+<section id="returned-course-list" style="display:none">
+  <h1>课程列表</h1>
+  <p>已返回上一级</p>
+</section>
+<script>
+  window.__mockFinalQuizBackCount = 0;
+  window.__mockPreviousVideoClickCount = 0;
+  document.getElementById("previous-video").addEventListener("click", () => {
+    window.__mockPreviousVideoClickCount += 1;
+    document.getElementById("course-reminder").style.display = "block";
+  });
+  document.getElementById("back").addEventListener("click", () => {
+    window.__mockFinalQuizBackCount += 1;
+    document.getElementById("course-page").remove();
+    document.getElementById("returned-course-list").style.display = "block";
+    history.pushState({}, "", "/jsncxyslhs/home/training/study/final-return");
+  });
+</script>
+</body>
+</html>`;
+
+const stalledPlaybackQuizHtml = String.raw`<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>江苏农商联合银行</title>
+  <style>
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    main { min-height: 640px; padding: 24px; }
+    video { display: block; width: 480px; height: 270px; background: #111; }
+    .course-main-sidebar { display: flex; gap: 12px; margin: 16px 24px; }
+    .course-main-content { width: 760px; }
+    .question-title { margin-bottom: 12px; font-weight: 600; }
+    label { display: flex; min-height: 30px; align-items: center; gap: 8px; }
+  </style>
+</head>
+<body>
+<aside class="course-main-sidebar">
+  <button class="item active" type="button">待切换视频课程</button>
+  <button class="item" type="button">卡住后测验题</button>
+</aside>
+<main>
+  <h1>待切换视频课程</h1>
+  <section class="course-main-content">
+    <video id="stalled-video"></video>
+  </section>
+</main>
+<script>
+  window.__mockStalledPlayCount = 0;
+  window.__mockQuizSubmitCount = 0;
+  window.__mockQuizConfirmCount = 0;
+  window.__mockQuizNoticeCloseCount = 0;
+  window.__mockNextLessonCount = 0;
+  window.__mockAiResponse = '{"answers":[{"question":1,"selected":["B"],"confidence":0.96,"reason":"新时代强调高质量发展"}]}';
+  const stalledVideo = document.getElementById("stalled-video");
+  let stalledCurrentTime = 120;
+  let stalledPaused = false;
+  Object.defineProperty(stalledVideo, "duration", { configurable: true, get: () => 120 });
+  Object.defineProperty(stalledVideo, "currentTime", {
+    configurable: true,
+    get: () => stalledCurrentTime,
+    set: (value) => { stalledCurrentTime = Number(value) || 0; }
+  });
+  Object.defineProperty(stalledVideo, "paused", { configurable: true, get: () => stalledPaused });
+  Object.defineProperty(stalledVideo, "ended", { configurable: true, get: () => true });
+  stalledVideo.pause = () => { stalledPaused = true; };
+  stalledVideo.play = () => {
+    window.__mockStalledPlayCount += 1;
+    stalledPaused = false;
+    return new Promise(() => {});
+  };
+
+  window.__renderQuizAfterStalledPlayback = () => {
+    document.body.innerHTML =
+      '<aside class="course-main-sidebar">' +
+        '<button id="quiz-lesson" class="item active" type="button">卡住后测验题</button>' +
+        '<button id="next-lesson" class="item" type="button">下一章课程</button>' +
+      '</aside>' +
+      '<main><h1>卡住后测验题</h1>' +
+        '<section class="course-main-content">' +
+          '<div data-question="1"><div class="question-title">1. (单选题) 新时代的硬道理是（ ）。</div>' +
+            '<label><input type="radio" name="q1"><span>高速发展</span></label>' +
+            '<label><input type="radio" name="q1"><span>高质量发展</span></label>' +
+            '<label><input type="radio" name="q1"><span>规模扩张</span></label>' +
+            '<label><input type="radio" name="q1"><span>粗放发展</span></label>' +
+          '</div>' +
+          '<button id="quiz-submit" type="button">提交答案</button>' +
+          '<div id="quiz-result" style="display:none">本次测验已通过</div>' +
+        '</section>' +
+        '<section id="next-content" style="display:none"><h1>下一章课程</h1><p>学习材料加载完成</p></section>' +
+      '</main>' +
+      '<div id="quiz-notice" role="dialog"><strong>测验须知</strong><span>共 1 题</span>' +
+        '<button id="quiz-notice-close" type="button">我知道了</button></div>' +
+      '<div id="quiz-confirm" role="dialog" style="display:none"><strong>确定交卷？</strong>' +
+        '<button id="quiz-confirm-submit" type="button">确定交卷</button></div>';
+
+    document.getElementById("quiz-notice-close").addEventListener("click", () => {
+      window.__mockQuizNoticeCloseCount += 1;
+      document.getElementById("quiz-notice").style.display = "none";
+    });
+    document.getElementById("quiz-submit").addEventListener("click", () => {
+      window.__mockQuizSubmitCount += 1;
+      document.getElementById("quiz-confirm").style.display = "block";
+    });
+    document.getElementById("quiz-confirm-submit").addEventListener("click", () => {
+      window.__mockQuizConfirmCount += 1;
+      document.getElementById("quiz-confirm").style.display = "none";
+      document.getElementById("quiz-result").style.display = "block";
+    });
+    document.getElementById("next-lesson").addEventListener("click", () => {
+      window.__mockNextLessonCount += 1;
+      document.querySelector(".course-main-content")?.remove();
+      document.getElementById("next-content").style.display = "block";
+      document.getElementById("quiz-lesson").className = "item";
+      document.getElementById("quiz-lesson").textContent = "卡住后测验题 已完成";
+      document.getElementById("next-lesson").className = "item active";
+    });
+  };
 </script>
 </body>
 </html>`;
@@ -503,11 +668,15 @@ try {
 
   await context.route("https://pc.kmelearning.com/**", (route) => {
     const requestUrl = route.request().url();
-    const body = requestUrl.includes("/time-short")
-      ? timeShortHtml
-      : (requestUrl.includes("/quiz-ai")
-        ? quizHtml
-        : (requestUrl.includes("/home/index") ? homeHtml : html));
+    const body = requestUrl.includes("/final-passed-result")
+      ? finalPassedQuizHtml
+      : (requestUrl.includes("/stalled-playback")
+        ? stalledPlaybackQuizHtml
+        : (requestUrl.includes("/time-short")
+          ? timeShortHtml
+          : (requestUrl.includes("/quiz-ai")
+            ? quizHtml
+            : (requestUrl.includes("/home/index") ? homeHtml : html))));
     route.fulfill({ status: 200, contentType: "text/html", body });
   });
 
@@ -705,6 +874,110 @@ try {
   }
   if (timeState.recordRefreshCount < 1 || timeState.inspect?.timeRequirement?.learnedSeconds !== 1943) {
     throw new Error(`stale course record refresh failed: ${JSON.stringify(timeState)}`);
+  }
+
+  // A KME player can be torn down while its play() Promise is still pending. The old video
+  // must not keep the global tick busy forever; once the quiz DOM replaces it, automatic
+  // answering should close the notice, call the model, submit once and continue once.
+  const stalledPlaybackPage = await context.newPage();
+  await stalledPlaybackPage.goto("https://pc.kmelearning.com/jsncxyslhs/home/course/stalled-playback");
+  await stalledPlaybackPage.evaluate((currentTarget) => {
+    const settings = {
+      running: false,
+      aiQuizEnabled: true,
+      aiQuizAutoSubmit: true,
+      skipQuestions: false,
+      aiEndpoint: "https://mock-ai.example/v1/chat/completions",
+      aiModel: "mock-answer-model",
+      aiRememberApiKey: true,
+      aiApiKey: "test-only-key",
+      nextDelayMs: 50
+    };
+    if (currentTarget === "userscript") Object.assign(window.__mockUserscriptStorage, settings);
+    else Object.assign(window.__mockChromeStorage, settings);
+  }, target);
+  await injectHelper(stalledPlaybackPage);
+  await stalledPlaybackPage.waitForSelector("#kme-learning-navigator", { timeout: 10000 });
+  await stalledPlaybackPage.evaluate(() => window.__kmeLearningNavigator.start());
+  await stalledPlaybackPage.waitForFunction(() => window.__mockStalledPlayCount === 1, undefined, { timeout: 5000 });
+  await stalledPlaybackPage.evaluate(() => window.__renderQuizAfterStalledPlayback());
+  try {
+    await stalledPlaybackPage.waitForFunction(() => window.__mockNextLessonCount === 1, undefined, { timeout: 10000 });
+  } catch {
+    const diagnostics = await stalledPlaybackPage.evaluate(() => ({
+      stalledPlayCount: window.__mockStalledPlayCount,
+      requests: window.__mockModelRequests.length,
+      noticeCloseCount: window.__mockQuizNoticeCloseCount,
+      submitCount: window.__mockQuizSubmitCount,
+      confirmCount: window.__mockQuizConfirmCount,
+      nextLessonCount: window.__mockNextLessonCount,
+      status: document.querySelector("#kme-learning-navigator-status")?.innerText || "",
+      panel: document.querySelector("#kme-learning-navigator")?.innerText || "",
+      body: document.body.innerText,
+      inspect: window.__kmeLearningNavigator.inspect()
+    }));
+    throw new Error(`stalled playback recovery timed out: ${JSON.stringify(diagnostics)}`);
+  }
+  const stalledPlaybackRecovery = await stalledPlaybackPage.evaluate(() => ({
+    stalledPlayCount: window.__mockStalledPlayCount,
+    requests: window.__mockModelRequests.length,
+    noticeCloseCount: window.__mockQuizNoticeCloseCount,
+    submitCount: window.__mockQuizSubmitCount,
+    confirmCount: window.__mockQuizConfirmCount,
+    nextLessonCount: window.__mockNextLessonCount,
+    inspect: window.__kmeLearningNavigator.inspect()
+  }));
+  if (stalledPlaybackRecovery.stalledPlayCount !== 1 ||
+      stalledPlaybackRecovery.requests !== 1 ||
+      stalledPlaybackRecovery.noticeCloseCount !== 1 ||
+      stalledPlaybackRecovery.submitCount !== 1 ||
+      stalledPlaybackRecovery.confirmCount !== 1 ||
+      stalledPlaybackRecovery.nextLessonCount !== 1 ||
+      stalledPlaybackRecovery.inspect?.quiz?.phase !== "completed" ||
+      stalledPlaybackRecovery.inspect?.running !== true) {
+    throw new Error(`stalled playback recovery failed: ${JSON.stringify(stalledPlaybackRecovery)}`);
+  }
+
+  // KME's real passed-result view removes the question controls. A passed quiz at the end
+  // of the directory must still finish the course. Wrapping around to an earlier, visually
+  // unmarked video reopens it, shows the KME course reminder and sends the automation back
+  // to the already-passed result page.
+  const finalPassedQuizPage = await context.newPage();
+  await finalPassedQuizPage.goto("https://pc.kmelearning.com/jsncxyslhs/home/training/study/final-passed-result");
+  await finalPassedQuizPage.evaluate((currentTarget) => {
+    const settings = {
+      running: false,
+      aiQuizEnabled: true,
+      aiQuizAutoSubmit: true,
+      skipQuestions: false,
+      enforceCourseTotalTime: true
+    };
+    if (currentTarget === "userscript") Object.assign(window.__mockUserscriptStorage, settings);
+    else Object.assign(window.__mockChromeStorage, settings);
+  }, target);
+  await injectHelper(finalPassedQuizPage);
+  await finalPassedQuizPage.waitForSelector("#kme-learning-navigator", { timeout: 10000 });
+  const finalQuizInitial = await finalPassedQuizPage.evaluate(() => window.__kmeLearningNavigator.inspect());
+  if (finalQuizInitial.pageLooksQuestion) {
+    throw new Error(`final passed result unexpectedly looked like a question page: ${JSON.stringify(finalQuizInitial)}`);
+  }
+  await finalPassedQuizPage.locator(".kme-learning-navigator-primary").click();
+  await finalPassedQuizPage.waitForFunction(() => window.__mockFinalQuizBackCount === 1, undefined, { timeout: 10000 });
+  await finalPassedQuizPage.waitForTimeout(600);
+  const finalQuizReturn = await finalPassedQuizPage.evaluate(() => ({
+    backCount: window.__mockFinalQuizBackCount,
+    previousVideoClickCount: window.__mockPreviousVideoClickCount,
+    reminderVisible: Boolean(document.getElementById("course-reminder")?.getClientRects().length),
+    returned: Boolean(document.getElementById("returned-course-list")?.getClientRects().length),
+    inspect: window.__kmeLearningNavigator.inspect()
+  }));
+  if (finalQuizReturn.backCount !== 1 ||
+      finalQuizReturn.previousVideoClickCount !== 0 ||
+      finalQuizReturn.reminderVisible ||
+      !finalQuizReturn.returned ||
+      finalQuizReturn.inspect?.timeRequirement?.requiredSeconds !== 3047 ||
+      finalQuizReturn.inspect?.timeRequirement?.learnedSeconds !== 3050) {
+    throw new Error(`final passed quiz return failed: ${JSON.stringify(finalQuizReturn)}`);
   }
 
   const quizPage = await context.newPage();
@@ -930,6 +1203,43 @@ try {
     throw new Error(`automatic quiz repeated an action: ${JSON.stringify(autoQuizNoRepeat)}`);
   }
 
+  const autoQuizResultFailurePage = await context.newPage();
+  await autoQuizResultFailurePage.goto("https://pc.kmelearning.com/jsncxyslhs/home/course/quiz-ai-auto-result-failure");
+  await autoQuizResultFailurePage.evaluate((currentTarget) => {
+    const settings = {
+      aiQuizEnabled: true,
+      aiQuizAutoSubmit: true,
+      skipQuestions: false,
+      aiEndpoint: "https://mock-ai.example/v1/chat/completions",
+      aiModel: "mock-answer-model",
+      aiRememberApiKey: true,
+      aiApiKey: "test-only-key"
+    };
+    if (currentTarget === "userscript") Object.assign(window.__mockUserscriptStorage, settings);
+    else Object.assign(window.__mockChromeStorage, settings);
+  }, target);
+  await injectHelper(autoQuizResultFailurePage);
+  await autoQuizResultFailurePage.waitForSelector("#kme-learning-navigator-quiz", { state: "visible", timeout: 5000 });
+  await autoQuizResultFailurePage.locator(".kme-learning-navigator-primary").click();
+  await autoQuizResultFailurePage.waitForFunction(() => {
+    const inspect = window.__kmeLearningNavigator?.inspect?.();
+    return inspect?.quiz?.phase === "failed" && inspect?.running === false;
+  }, undefined, { timeout: 15000 });
+  const autoQuizResultFailure = await autoQuizResultFailurePage.evaluate(() => ({
+    inspect: window.__kmeLearningNavigator.inspect(),
+    requests: window.__mockModelRequests.length,
+    submitCount: window.__mockQuizSubmitCount,
+    confirmCount: window.__mockQuizConfirmCount,
+    nextLessonCount: window.__mockNextLessonCount
+  }));
+  if (!autoQuizResultFailure.inspect.quiz.error.includes("未通过") ||
+      autoQuizResultFailure.requests !== 1 ||
+      autoQuizResultFailure.submitCount !== 1 ||
+      autoQuizResultFailure.confirmCount !== 1 ||
+      autoQuizResultFailure.nextLessonCount !== 0) {
+    throw new Error(`stable quiz failure detection failed: ${JSON.stringify(autoQuizResultFailure)}`);
+  }
+
   const autoQuizFailurePage = await context.newPage();
   await autoQuizFailurePage.goto("https://pc.kmelearning.com/jsncxyslhs/home/course/quiz-ai-auto-failure");
   await autoQuizFailurePage.evaluate((currentTarget) => {
@@ -988,6 +1298,19 @@ try {
       requiredSeconds: timeState.inspect.timeRequirement.requiredSeconds,
       learnedSeconds: timeState.inspect.timeRequirement.learnedSeconds
     },
+    stalledPlaybackRecovery: {
+      stalledPlayCount: stalledPlaybackRecovery.stalledPlayCount,
+      requests: stalledPlaybackRecovery.requests,
+      submitCount: stalledPlaybackRecovery.submitCount,
+      confirmCount: stalledPlaybackRecovery.confirmCount,
+      nextLessonCount: stalledPlaybackRecovery.nextLessonCount
+    },
+    finalQuizReturn: {
+      backCount: finalQuizReturn.backCount,
+      previousVideoClickCount: finalQuizReturn.previousVideoClickCount,
+      requiredSeconds: finalQuizReturn.inspect.timeRequirement.requiredSeconds,
+      learnedSeconds: finalQuizReturn.inspect.timeRequirement.learnedSeconds
+    },
     aiQuiz: {
       questions: quizAnalyzed.inspect.quiz.questions,
       answers: quizAnalyzed.inspect.quiz.answers.length,
@@ -1002,6 +1325,7 @@ try {
       confirmCount: autoQuizState.confirmCount,
       nextLessonCount: autoQuizState.nextLessonCount,
       noRepeat: Object.values(autoQuizNoRepeat).every((count) => count === 1),
+      stableResultFailure: autoQuizResultFailure.inspect.quiz.phase === "failed",
       failureAttempts: autoQuizFailure.requests
     },
     currentPage: "电子邮件安全"

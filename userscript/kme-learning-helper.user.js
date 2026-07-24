@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         KME 学习助手
 // @namespace    https://github.com/skyjt/kmelearning-helper
-// @version      2.11.0
+// @version      2.11.1
 // @description  自动学习 KME 课程，并通过用户配置的大模型完成可见测验和后续课程。
 // @author       skyjt
 // @license      MIT
@@ -130,6 +130,9 @@
   const AI_REQUEST_TIMEOUT_MS = 60000;
   const AI_QUIZ_RESULT_WAIT_MS = 20000;
   const AI_QUIZ_MAX_ANALYSIS_ATTEMPTS = 2;
+  const AI_QUIZ_FAILURE_STABILITY_MS = 2500;
+  const STORAGE_OPERATION_TIMEOUT_MS = 3000;
+  const MEDIA_PLAY_TIMEOUT_MS = 5000;
   const DEFAULTS = {
     running: false,
     autoPlay: true,
@@ -192,6 +195,7 @@
     quizAutoPhase: "idle",
     quizAutoAttempts: 0,
     quizSubmittedAt: 0,
+    quizFailureSeenAt: 0,
     rootEl: null
   };
 
@@ -231,10 +235,18 @@
       const area = storageArea();
       if (!area) return { ...DEFAULTS };
       return new Promise((resolve) => {
+        let settled = false;
+        const finish = (value) => {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(timer);
+          resolve(value || { ...DEFAULTS });
+        };
+        const timer = window.setTimeout(() => finish({ ...DEFAULTS }), STORAGE_OPERATION_TIMEOUT_MS);
         try {
-          area.get(DEFAULTS, (value) => resolve(value || { ...DEFAULTS }));
+          area.get(DEFAULTS, finish);
         } catch {
-          resolve({ ...DEFAULTS });
+          finish({ ...DEFAULTS });
         }
       });
     },
@@ -242,10 +254,18 @@
       const area = storageArea();
       if (!area) return;
       return new Promise((resolve) => {
-        try {
-          area.set(patch, resolve);
-        } catch {
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(timer);
           resolve();
+        };
+        const timer = window.setTimeout(finish, STORAGE_OPERATION_TIMEOUT_MS);
+        try {
+          area.set(patch, finish);
+        } catch {
+          finish();
         }
       });
     }
@@ -287,6 +307,55 @@
 
   const now = () => Date.now();
   const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
+  function mediaPlayGuardError(code, message) {
+    const error = new Error(message);
+    error.name = code;
+    return error;
+  }
+
+  async function playVideoWithGuard(video, timeoutMs = MEDIA_PLAY_TIMEOUT_MS) {
+    if (!video?.isConnected) {
+      throw mediaPlayGuardError("KmeMediaStaleError", "播放器已经离开当前页面");
+    }
+
+    const startUrl = location.href;
+    const startedAt = now();
+    let guardTimer = 0;
+    const guard = new Promise((_, reject) => {
+      const check = () => {
+        if (!video.isConnected || location.href !== startUrl) {
+          reject(mediaPlayGuardError("KmeMediaStaleError", "播放器所在页面已经切换"));
+          return;
+        }
+        if (now() - startedAt >= timeoutMs) {
+          try {
+            video.pause();
+          } catch {
+            // A detached or replaced player may reject pause as it is being torn down.
+          }
+          reject(mediaPlayGuardError("KmeMediaTimeoutError", "播放器启动超时"));
+          return;
+        }
+        guardTimer = window.setTimeout(check, 100);
+      };
+      guardTimer = window.setTimeout(check, 100);
+    });
+
+    try {
+      await Promise.race([Promise.resolve().then(() => video.play()), guard]);
+      if (!video.isConnected || location.href !== startUrl) {
+        throw mediaPlayGuardError("KmeMediaStaleError", "播放器所在页面已经切换");
+      }
+      return true;
+    } finally {
+      window.clearTimeout(guardTimer);
+    }
+  }
+
+  function scheduleCurrentPageCheck(reason = "media-stale") {
+    window.setTimeout(() => tick(reason), 0);
+  }
+
   const normalize = (text) => (text || "").replace(/\s+/g, " ").trim();
   const compact = (text) => normalize(text).replace(/\s+/g, "");
   // innerText forces a reflow and is one of the hottest calls in the script (every row,
@@ -714,6 +783,7 @@
       state.quizAutoPhase = "idle";
       state.quizAutoAttempts = 0;
       state.quizSubmittedAt = 0;
+      state.quizFailureSeenAt = 0;
     }
     state.quizFingerprint = fingerprint;
     state.quizQuestions = plainQuizQuestions(questions);
@@ -891,17 +961,28 @@
       .map((el) => textOf(el))
       .filter((text) => text.length >= 2 && text.length <= 120);
     if (feedbackTexts.some((text) => (
+      /^(?:恭喜(?:您|你)?[，,!！\s]*)?(?:本次)?(?:测验|考试|答题)(?:已)?(?:通过|合格)(?=$|[\s，,。.!！：:])/.test(text) ||
+      /^恭喜(?:您|你)?(?:已)?通过(?:本次)?(?:测验|考试|答题)/.test(text)
+    ))) {
+      state.quizFailureSeenAt = 0;
+      return "passed";
+    }
+
+    const failureVisible = feedbackTexts.some((text) => (
       /^(?:本次)?(?:测验|考试|答题)(?:未|没有)(?:通过|完成|合格)/.test(text) ||
       /^很遗憾[，,!！\s]*(?:您|你)?(?:本次)?(?:未|没有)(?:通过|完成|合格)(?:本次)?(?:测验|考试|答题)/.test(text) ||
       /^未达到(?:合格|通过)标准/.test(text)
-    ))) return "failed";
-    if (feedbackTexts.some((text) => (
-      /^(?:恭喜(?:您|你)?[，,!！\s]*)?(?:本次)?(?:测验|考试|答题)(?:已)?(?:通过|合格)(?=$|[\s，,。.!！：:])/.test(text) ||
-      /^恭喜(?:您|你)?(?:已)?通过(?:本次)?(?:测验|考试|答题)/.test(text)
-    ))) return "passed";
+    ));
+    if (failureVisible) {
+      if (!state.quizFailureSeenAt) state.quizFailureSeenAt = now();
+      return now() - state.quizFailureSeenAt >= AI_QUIZ_FAILURE_STABILITY_MS ? "failed" : "pending";
+    }
 
     const active = activeContentItem();
-    if (state.quizSubmittedAt && active && questionLikeItem(active) && itemComplete(active)) return "passed";
+    if (state.quizSubmittedAt && active && questionLikeItem(active) && itemComplete(active)) {
+      state.quizFailureSeenAt = 0;
+      return "passed";
+    }
 
     const panelText = textOf(state.rootEl);
     const pageText = normalize(textOf(document.body).replace(panelText, ""));
@@ -909,12 +990,22 @@
       const scoreMatch = pageText.match(/(?:本次)?(?:得分|成绩|正确率)\s*[:：]?\s*(\d+(?:\.\d+)?)\s*(?:分|%)?/);
       const passMatch = pageText.match(/合格分数\s*[:：]?\s*(\d+(?:\.\d+)?)/);
       if (scoreMatch && passMatch) {
-        return Number(scoreMatch[1]) >= Number(passMatch[1]) ? "passed" : "failed";
+        if (Number(scoreMatch[1]) >= Number(passMatch[1])) {
+          state.quizFailureSeenAt = 0;
+          return "passed";
+        }
+        if (!state.quizFailureSeenAt) state.quizFailureSeenAt = now();
+        return now() - state.quizFailureSeenAt >= AI_QUIZ_FAILURE_STABILITY_MS ? "failed" : "pending";
       }
-      if (/(?:测验|考试|答题).{0,12}(?:通过|合格)/.test(pageText)) return "passed";
+      if (/(?:测验|考试|答题).{0,12}(?:通过|合格)/.test(pageText)) {
+        state.quizFailureSeenAt = 0;
+        return "passed";
+      }
       // 平台会先渲染“再考一次”，随后才补上成绩和通过提示；此时继续等待完整结果。
+      state.quizFailureSeenAt = 0;
       return "pending";
     }
+    state.quizFailureSeenAt = 0;
     return "pending";
   }
 
@@ -975,6 +1066,7 @@
     const startUrl = location.href;
     submit.click();
     state.quizSubmittedAt = now();
+    state.quizFailureSeenAt = 0;
 
     for (let index = 0; index < 12; index += 1) {
       await sleep(250);
@@ -1103,12 +1195,19 @@
   }
 
   async function advanceCompletedQuiz() {
-    const next = nextContentItem();
+    // A passed quiz is terminal for the current position. Only move forward in the
+    // directory; wrapping to an earlier video reopens completed content and can create a
+    // course-reminder -> passed-quiz loop on KME when the quiz is the final item.
+    const next = nextContentItem({ wrap: false });
     if (next) {
       clickElement(next, `测验已完成，进入下一项：${titleFromText(textOf(next))}`);
       return;
     }
-    const requirement = await courseTimeRequirement();
+    // KME's "1 学时" is the course credit value and can be longer than the
+    // playable directory content. Once the final quiz has passed, compare the
+    // platform record with the actual directory duration so a completed course
+    // is not reopened just to chase the credit-hour label.
+    const requirement = await courseTimeRequirement({ preferDirectoryDuration: true });
     if (!requirement.satisfied) {
       await supplementCourseTime(requirement);
       return;
@@ -1190,6 +1289,7 @@
     });
 
     video.addEventListener("play", () => {
+      if (!video.isConnected) return;
       applySpeed(video);
       const duration = Number.isFinite(video.duration) ? Math.round(video.duration) : 0;
       state.lastVideoState = duration ? `视频播放中，1x，约 ${duration} 秒` : "视频播放中，1x";
@@ -1210,17 +1310,29 @@
     if (!video.paused) return true;
 
     try {
-      await video.play();
+      await playVideoWithGuard(video);
       setStatus("已自动播放，保持 1x 等平台心跳确认");
       return true;
-    } catch {
-      try {
-        video.muted = true;
-        await video.play();
-        setStatus("已静音自动播放，保持 1x 等平台心跳确认");
-        return true;
-      } catch {
-        // Fall through to the player's own controls.
+    } catch (error) {
+      if (error?.name === "KmeMediaStaleError") {
+        setStatus("播放器已切换，正在重新识别当前学习页面");
+        scheduleCurrentPageCheck();
+        return false;
+      }
+      if (error?.name !== "KmeMediaTimeoutError") {
+        try {
+          video.muted = true;
+          await playVideoWithGuard(video);
+          setStatus("已静音自动播放，保持 1x 等平台心跳确认");
+          return true;
+        } catch (mutedError) {
+          if (mutedError?.name === "KmeMediaStaleError") {
+            setStatus("播放器已切换，正在重新识别当前学习页面");
+            scheduleCurrentPageCheck();
+            return false;
+          }
+          // Fall through to the player's own controls.
+        }
       }
       const play = [...document.querySelectorAll(".prism-big-play-btn, .prism-play-btn, button, [role='button']")]
         .find((el) => visible(el) && (/播放|开始|play/i.test(textOf(el)) || /play/i.test(String(el.className || ""))));
@@ -1428,16 +1540,18 @@
       .find(visible) || null;
   }
 
-  function courseRequiredSeconds() {
+  function courseRequiredSeconds({ preferDirectoryDuration = false } = {}) {
+    const itemSeconds = contentItems()
+      .map((item) => parseClockToSeconds(textOf(item)))
+      .filter((seconds) => seconds > 0);
+    const summed = itemSeconds.reduce((total, seconds) => total + seconds, 0);
+    if (preferDirectoryDuration && summed) return { seconds: summed, source: "目录视频时长" };
+
     const root = courseRoot();
     const scoped = root ? textOf(root) : "";
     const scopedHours = parseLearningHourSeconds(scoped);
     if (scopedHours) return { seconds: scopedHours, source: "课程学时" };
 
-    const itemSeconds = contentItems()
-      .map((item) => parseClockToSeconds(textOf(item)))
-      .filter((seconds) => seconds > 0);
-    const summed = itemSeconds.reduce((total, seconds) => total + seconds, 0);
     if (summed) return { seconds: summed, source: "目录视频时长" };
 
     return { seconds: 0, source: "" };
@@ -1532,8 +1646,8 @@
     return waitForCourseRecordLoad(previousLearned);
   }
 
-  async function courseTimeRequirement() {
-    const required = courseRequiredSeconds();
+  async function courseTimeRequirement(options = {}) {
+    const required = courseRequiredSeconds(options);
     if (!state.settings.enforceCourseTotalTime || !required.seconds) {
       return {
         requiredSeconds: required.seconds,
@@ -1563,14 +1677,16 @@
     };
   }
 
-  function nextContentItem() {
+  function nextContentItem({ wrap = true } = {}) {
     const items = contentItems();
     if (!items.length) return null;
     const active = activeContentItem();
     const activeIndex = active
       ? items.findIndex((item) => item === active || item.contains(active) || active.contains(item) || compact(textOf(item)).includes(compact(textOf(active))))
       : -1;
-    const ordered = activeIndex >= 0 ? [...items.slice(activeIndex + 1), ...items.slice(0, activeIndex)] : items;
+    const ordered = activeIndex >= 0
+      ? (wrap ? [...items.slice(activeIndex + 1), ...items.slice(0, activeIndex)] : items.slice(activeIndex + 1))
+      : items;
     return ordered.find((item) => {
       if (itemComplete(item)) return false;
       if (questionLikeItem(item) && state.settings.skipQuestions) return false;
@@ -1729,10 +1845,15 @@
         }
         video.playbackRate = 1;
         video.defaultPlaybackRate = 1;
-        await video.play();
+        await playVideoWithGuard(video);
         setStatus(`${message}，已重播当前视频`);
         return true;
-      } catch {
+      } catch (error) {
+        if (error?.name === "KmeMediaStaleError") {
+          setStatus("播放器已切换，正在重新识别当前学习页面");
+          scheduleCurrentPageCheck();
+          return false;
+        }
         const play = [...document.querySelectorAll(".prism-big-play-btn, .prism-play-btn, button, [role='button']")]
           .find((el) => visible(el) && (/播放|重播|play/i.test(textOf(el)) || /play/i.test(String(el.className || ""))));
         if (play) return clickElement(play, `${message}，已点击播放按钮`);
@@ -1754,6 +1875,11 @@
 
   async function recoverUnconfirmedEnd(video) {
     if (!state.settings.recoverOnUnconfirmedEnd || !video) return false;
+    if (!video.isConnected || !Number.isFinite(video.duration) || video.duration <= 0) {
+      setStatus("播放器已切换或失效，正在重新识别当前学习页面");
+      scheduleCurrentPageCheck("stale-video-recovery");
+      return false;
+    }
     const key = `${location.href}::${Math.round(video.duration || 0)}`;
     if (state.runtime.recoveryKey !== key) {
       await runtimePatch({ recoveryKey: key, recoveryCount: 0 });
@@ -1769,10 +1895,15 @@
       video.currentTime = 0;
       video.playbackRate = 1;
       video.defaultPlaybackRate = 1;
-      await video.play();
+      await playVideoWithGuard(video);
       setStatus("视频结束但未完成，已按 1x 重播补足平台学习时长");
       return true;
-    } catch {
+    } catch (error) {
+      if (error?.name === "KmeMediaStaleError") {
+        setStatus("播放器已切换，正在重新识别当前学习页面");
+        scheduleCurrentPageCheck("stale-video-recovery");
+        return false;
+      }
       const play = [...document.querySelectorAll(".prism-big-play-btn, .prism-play-btn, button, [role='button']")]
         .find((el) => visible(el) && (/播放|重播|play/i.test(textOf(el)) || /play/i.test(String(el.className || ""))));
       if (play) return clickElement(play, "视频结束但未完成，已点击重播补学");
@@ -1824,6 +1955,18 @@
     const liveVideos = videos();
     liveVideos.forEach(bindVideo);
     liveVideos.forEach(applySpeed);
+
+    // KME removes the question controls after submission, so a result-only page can look
+    // like ordinary completed course content. Keep using the active directory item plus
+    // explicit result evidence to route that page through the quiz completion flow.
+    const active = activeContentItem();
+    const activeQuizResult = state.settings.aiQuizEnabled && active && questionLikeItem(active)
+      ? quizResultStatus()
+      : "pending";
+    if (activeQuizResult === "passed" || activeQuizResult === "failed") {
+      await handleQuestionPage();
+      return;
+    }
 
     if (pageLooksQuestion()) {
       await handleQuestionPage();

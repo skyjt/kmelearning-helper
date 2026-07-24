@@ -4,7 +4,7 @@
 
 **把「点开 → 等播完 → 返回 → 下一门」的机械重复交给浏览器，把时间还给你。**
 
-[![版本](https://img.shields.io/badge/版本-v2.11.0-1f6feb)](https://github.com/skyjt/kmelearning-helper/releases/latest)
+[![版本](https://img.shields.io/badge/版本-v2.11.1-1f6feb)](https://github.com/skyjt/kmelearning-helper/releases/latest)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-4285F4?logo=googlechrome&logoColor=white)](https://github.com/skyjt/kmelearning-helper/releases/latest)
 [![油猴脚本](https://img.shields.io/badge/Tampermonkey-支持-00485B?logo=tampermonkey&logoColor=white)](https://raw.githubusercontent.com/skyjt/kmelearning-helper/main/userscript/kme-learning-helper.user.js)
@@ -189,10 +189,11 @@ ZIP 不能直接加载，必须先解压。更新时下载新包解压替换原�
 
 ## 最近更新
 
-最近一次更新（**v2.11.0**）：自动学习时标签页标题实时显示「自动学习中 + 课程进度」，不用点开页面就能在标签栏看到学到哪了；停止后恢复原标题。
+最近一次更新（**v2.11.1**）：修复课程页面切换时旧播放器可能卡住主循环，以及最终测验通过后在“课程提醒”和 95 分结果之间反复跳转的问题。
 
 | 版本 | 主要变化 |
 | --- | --- |
+| **v2.11.1** | 防止失效播放器和存储回调卡住自动学习；稳定识别测验结果；修复最终测验通过后的课程提醒循环 |
 | **v2.11.0** | 自动学习时标签页标题实时显示「自动学习中 + 课程进度」，停止后恢复原标题 |
 | **v2.10.x** | 统一「项目 / 课程 / 小节」层级，精简首页浮窗，补齐「测试题」目录识别 |
 | **v2.9.x** | 全自动答题、提交与通过后续学流程，优化异步结果判断 |
