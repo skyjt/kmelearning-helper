@@ -1,6 +1,6 @@
 (() => {
   const EXT_ID = "kme-learning-navigator";
-  const HOST_PATTERN = /pc\.kmelearning\.com$/;
+  const HOST_PATTERN = /(^|\.)pc\.kmelearning\.com$/;
   const DEFAULT_RUNTIME = {
     catalogUrl: "",
     currentCourseTitle: "",
@@ -42,6 +42,7 @@
     aiApiKey: "",
     panelOpen: true,
     nextDelayMs: 3500,
+    completionConfirmWaitMs: 20000,
     runtime: DEFAULT_RUNTIME
   };
 
@@ -91,6 +92,7 @@
     quizAutoAttempts: 0,
     quizSubmittedAt: 0,
     quizFailureSeenAt: 0,
+    recoveryExhaustedKey: "",
     rootEl: null
   };
 
@@ -194,7 +196,9 @@
       };
     } catch (error) {
       if (error?.name === "AbortError") throw new Error("模型请求超时，请稍后重试");
-      throw new Error("模型接口请求失败；油猴版请确认已允许目标接口域名");
+      // Only the extension reaches this fetch path (the userscript delegates to
+      // GM_xmlhttpRequest above), so the guidance is about CORS, not @connect.
+      throw new Error("模型接口请求失败，请检查网络，或确认模型接口允许浏览器跨域访问");
     } finally {
       window.clearTimeout(timer);
     }
@@ -342,8 +346,12 @@
 
   function setStatus(message) {
     state.status = message;
-    const status = document.querySelector(`#${EXT_ID}-status`);
-    if (status) status.textContent = message;
+    const statusText = document.querySelector(`#${EXT_ID}-status-text`);
+    if (statusText) {
+      statusText.textContent = message;
+      // Long statuses are clamped to two lines in CSS; the full text stays on hover.
+      statusText.title = message;
+    }
     updatePanelSummary();
   }
 
@@ -507,6 +515,12 @@
       };
     }).filter(Boolean);
   }
+
+  // Display-only readers (the panel summary and the quiz section) share one extraction
+  // per scan epoch instead of re-walking the quiz DOM on every 1.5s panel refresh.
+  // Action paths (analyze / apply / auto-submit) still call extractQuizQuestions()
+  // directly so they always see the live DOM right after a click.
+  const extractQuizQuestionsCached = memoScan(() => extractQuizQuestions());
 
   function plainQuizQuestions(questions) {
     return questions.map((question) => ({
@@ -1358,7 +1372,7 @@
   function pageLooksCatalog() {
     const rows = catalogRows();
     if (rows.length >= 2 && bodyText().includes("活动")) return true;
-    if (rows.length >= 2 && /\/home\/training\/study\//.test(location.pathname) && !primaryVideo()) return true;
+    if (rows.length >= 2 && isStudyCatalogPage() && !primaryVideo()) return true;
     return false;
   }
 
@@ -1528,22 +1542,22 @@
 
     const previousLearned = learnedTotalSeconds();
     setStatus("正在刷新平台学习记录，等待最新总时长");
+    // One dedupe reset covers both tab clicks below: the two tabs have different click
+    // keys, so the second reset that used to sit between them was a redundant write.
+    await runtimePatch({ lastTargetKey: "", lastTargetAt: 0 });
     if (tabActive(recordTab)) {
       const resetTab = exactTab("目录") || exactTab("评论");
-      if (resetTab) {
-        await runtimePatch({ lastTargetKey: "", lastTargetAt: 0 });
-        if (clickElement(resetTab, "重新载入学习记录")) await sleep(600);
-      }
+      if (resetTab && clickElement(resetTab, "重新载入学习记录")) await sleep(600);
     }
 
-    await runtimePatch({ lastTargetKey: "", lastTargetAt: 0 });
     if (!await switchCourseTab("记录")) return learnedTotalSeconds();
     return waitForCourseRecordLoad(previousLearned);
   }
 
   async function courseTimeRequirement(options = {}) {
     const required = courseRequiredSeconds(options);
-    if (!state.settings.enforceCourseTotalTime || !required.seconds) {
+    const forceCheck = Boolean(options.forceCheck);
+    if ((!state.settings.enforceCourseTotalTime && !forceCheck) || !required.seconds) {
       return {
         requiredSeconds: required.seconds,
         learnedSeconds: learnedTotalSeconds(),
@@ -1572,7 +1586,7 @@
     };
   }
 
-  function nextContentItem({ wrap = true } = {}) {
+  function nextContentItem({ wrap = true, includeSkippedQuestions = false } = {}) {
     const items = contentItems();
     if (!items.length) return null;
     const active = activeContentItem();
@@ -1584,7 +1598,7 @@
       : items;
     return ordered.find((item) => {
       if (itemComplete(item)) return false;
-      if (questionLikeItem(item) && state.settings.skipQuestions) return false;
+      if (questionLikeItem(item) && state.settings.skipQuestions && !includeSkippedQuestions) return false;
       return true;
     }) || null;
   }
@@ -1681,14 +1695,17 @@
       completedCourseTitles: uniqueStrings([...completedTitles, title]),
       catalogCompleted: isNewComplete && total ? Math.min(total, completed + 1) : completed,
       catalogProgressAt: isNewComplete && total ? now() : Number(state.runtime.catalogProgressAt || 0),
-      currentCourseTitle: ""
+      currentCourseTitle: "",
+      lastCourseRequiredSeconds: 0,
+      lastCourseLearnedSeconds: 0,
+      lastCourseTimeCheckedAt: 0
     });
   }
 
   async function returnToCatalog(message = "当前目录项已完成，返回课程列表") {
     await markCurrentCourseComplete();
     const back = [...document.querySelectorAll("button, a, [role='button']")]
-      .find((el) => visible(el) && /^返回$|返回/.test(textOf(el)));
+      .find((el) => visible(el) && !state.rootEl?.contains(el) && /^返回/.test(textOf(el)));
     if (back && clickElement(back, message)) return true;
 
     if (state.runtime.catalogUrl && location.href !== state.runtime.catalogUrl) {
@@ -1768,6 +1785,66 @@
     return false;
   }
 
+  async function waitForCurrentContentComplete() {
+    const waitMs = Math.max(0, Number(state.settings.completionConfirmWaitMs) || 0);
+    const deadline = now() + waitMs;
+    do {
+      invalidateScans();
+      if (currentContentComplete()) return true;
+      const remaining = deadline - now();
+      if (remaining <= 0) break;
+      await sleep(Math.min(1000, remaining));
+    } while (state.settings.running);
+
+    invalidateScans();
+    return currentContentComplete();
+  }
+
+  async function confirmEndedVideoCompletion(video, videoKey) {
+    setStatus("视频已完整播放，等待平台确认完成状态");
+    if (await waitForCurrentContentComplete()) return "marker";
+    if (!state.settings.running || !video?.isConnected || pageLooksQuestion()) return "changed";
+
+    // KME can persist every watch-time heartbeat before the directory checkmark is
+    // repainted. Refresh the server-backed record before deciding that a full replay is
+    // necessary, and compare it with the real directory duration rather than the course's
+    // credit-hour label.
+    const requirement = await courseTimeRequirement({
+      preferDirectoryDuration: true,
+      forceCheck: true
+    });
+    if (!state.settings.running || !video.isConnected || pageLooksQuestion()) return "changed";
+
+    const directoryTab = exactTab("目录");
+    if (directoryTab && !tabActive(directoryTab)) await switchCourseTab("目录");
+    invalidateScans();
+
+    if (currentContentComplete()) return "marker";
+    const recordConfirmsCompletion = requirement.requiredSeconds > 0 &&
+      requirement.learnedSeconds > 0 && requirement.satisfied;
+    if (!recordConfirmsCompletion) return "unconfirmed";
+
+    const next = nextContentItem({ wrap: false, includeSkippedQuestions: true });
+    if (next) {
+      state.recoveryExhaustedKey = "";
+      await runtimePatch({ recoveryKey: "", recoveryCount: 0 });
+      clickElement(
+        next,
+        `视频已完整播放，平台记录 ${formatSeconds(requirement.learnedSeconds)} 已达标，进入下一项：${titleFromText(textOf(next))}`
+      );
+      return "advanced";
+    }
+
+    // With no following directory item, keep the finished video at its endpoint and stop
+    // automatic replay. This preserves the user's completed watch time while leaving the
+    // page available for a delayed platform checkmark or manual confirmation.
+    state.recoveryExhaustedKey = videoKey;
+    setStatus(
+      `视频已完整播放且平台记录已达标（${formatSeconds(requirement.learnedSeconds)} / ${formatSeconds(requirement.requiredSeconds)}），等待完成标记`
+    );
+    return "recorded";
+  }
+
   async function recoverUnconfirmedEnd(video) {
     if (!state.settings.recoverOnUnconfirmedEnd || !video) return false;
     if (!video.isConnected || !Number.isFinite(video.duration) || video.duration <= 0) {
@@ -1780,6 +1857,9 @@
       await runtimePatch({ recoveryKey: key, recoveryCount: 0 });
     }
     if (Number(state.runtime.recoveryCount || 0) >= 2) {
+      // The replay budget for this exact video is spent: latch its key so the main loop
+      // stops sleeping-and-retrying every tick until a different video shows up.
+      state.recoveryExhaustedKey = key;
       setStatus("视频已结束但仍未显示完成，请人工确认页面提示");
       return false;
     }
@@ -1841,7 +1921,15 @@
     }
 
     const title = titleFromText(textOf(row));
-    await runtimePatch({ currentCourseTitle: title, recoveryKey: "", recoveryCount: 0 });
+    state.recoveryExhaustedKey = "";
+    await runtimePatch({
+      currentCourseTitle: title,
+      recoveryKey: "",
+      recoveryCount: 0,
+      lastCourseRequiredSeconds: 0,
+      lastCourseLearnedSeconds: 0,
+      lastCourseTimeCheckedAt: 0
+    });
     clickElement(row, `进入未完成课程：${title}`);
   }
 
@@ -1892,18 +1980,20 @@
     const video = primaryVideo();
     if (video) {
       await tryAutoPlay();
-      if (video.paused) {
-        setStatus("视频尚未开始，正在重试自动播放");
-        return;
-      }
       if (currentContentComplete()) return;
       if (video.ended || (Number.isFinite(video.duration) && video.duration > 0 && video.currentTime >= video.duration - 1)) {
-        await sleep(state.settings.nextDelayMs);
-        if (currentContentComplete()) {
+        const videoKey = `${location.href}::${Math.round(video.duration || 0)}`;
+        if (state.recoveryExhaustedKey === videoKey) return;
+        const confirmation = await confirmEndedVideoCompletion(video, videoKey);
+        if (confirmation === "marker") {
           await handleContent();
-        } else {
+        } else if (confirmation === "unconfirmed") {
           await recoverUnconfirmedEnd(video);
         }
+        return;
+      }
+      if (video.paused) {
+        setStatus("视频尚未开始，正在重试自动播放");
         return;
       }
       const progress = Number.isFinite(video.duration) && video.duration > 0
@@ -1950,6 +2040,10 @@
         const started = await clickStartControl();
         if (!started) setStatus(`等待学习页面加载：${reason}`);
       }
+    } catch (error) {
+      // The loop must survive an unexpected failure in any handler; log it and let the
+      // next tick retry instead of surfacing an unhandled rejection every cycle.
+      console.warn(`[${EXT_ID}] tick(${reason}) 出错，将在下一周期重试`, error);
     } finally {
       state.busy = false;
       updatePanelSummary();
@@ -1980,6 +2074,7 @@
   }
 
   async function beginLearningSession({ catalogUrl, progress, status }) {
+    state.recoveryExhaustedKey = "";
     await runtimePatch({
       catalogUrl,
       currentCourseTitle: "",
@@ -2153,10 +2248,13 @@
   }
 
   function updatePanelSummary() {
-    updateHomeTaskDisplay();
-    // The tab title mirrors progress even while the panel is minimized, so keep it fresh
-    // before the early return below.
+    // The tab title mirrors progress even while the panel is minimized or the tab is
+    // hidden, so keep it fresh before any early return below.
     syncDocumentTitle();
+    // A hidden tab only needs the title above; scanning the page for a panel nobody can
+    // see is wasted work (the 1.5s timer fires again once the tab becomes visible).
+    if (document.hidden) return;
+    updateHomeTaskDisplay();
     // Panel content is display:none while minimized; skip the expensive DOM scans until the
     // user restores it (restore() calls this again to refresh).
     if (!state.panelOpen) return;
@@ -2177,7 +2275,7 @@
     const video = primaryVideo();
     const parts = [];
     if (state.settings.aiQuizEnabled && pageLooksQuestion()) {
-      parts.push(`测验 ${extractQuizQuestions().length} 题`);
+      parts.push(`测验 ${extractQuizQuestionsCached().length} 题`);
     }
     if (catalogCount) parts.push(`课程 ${catalogCount}`);
     if (contentCount) parts.push(`小节 ${contentCount}`);
@@ -2543,7 +2641,7 @@
     section.hidden = !active;
     if (!active) return;
 
-    const liveQuestions = extractQuizQuestions();
+    const liveQuestions = extractQuizQuestionsCached();
     const fingerprint = quizFingerprint(liveQuestions);
     if (liveQuestions.length && fingerprint !== state.quizFingerprint && !state.quizBusy) {
       resetQuizResult(fingerprint, liveQuestions);
@@ -2712,7 +2810,7 @@
     minimize.className = `${EXT_ID}-minimize`;
     minimize.setAttribute("aria-label", "最小化学习助手");
     minimize.title = "最小化";
-    minimize.textContent = "-";
+    minimize.textContent = "−";
     minimize.addEventListener("click", async () => {
       state.panelOpen = false;
       root.classList.remove("open");
@@ -2837,7 +2935,13 @@
     const status = document.createElement("div");
     status.id = `${EXT_ID}-status`;
     status.className = `${EXT_ID}-status`;
-    status.textContent = state.status;
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    const statusText = document.createElement("span");
+    statusText.id = `${EXT_ID}-status-text`;
+    statusText.className = `${EXT_ID}-status-text`;
+    statusText.textContent = state.status;
+    status.append(statusText);
 
     const summary = document.createElement("div");
     summary.id = `${EXT_ID}-summary`;
@@ -2885,8 +2989,8 @@
       await storage.set({ panelOpen: true });
       updatePanelSummary();
     };
+    // Click-only restore: hovering across the corner used to pop the panel open by accident.
     toggle.addEventListener("click", restore);
-    toggle.addEventListener("mouseenter", restore);
 
     root.append(panel, toggle);
     document.documentElement.appendChild(root);
@@ -2968,6 +3072,12 @@
 
     renderPanel();
     exposeDebugApi();
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && state.pendingHomeTaskKey) {
+        hideTaskConfirmation();
+        setStatus("已取消，请选择需要学习的项目");
+      }
+    });
     restoreSpeedMenu();
     videos().forEach(bindVideo);
 

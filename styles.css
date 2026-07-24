@@ -18,6 +18,13 @@
   box-sizing: border-box;
 }
 
+/* Several containers below set display:grid/flex, which would otherwise override the
+   hidden attribute wherever the script toggles it (actions row, task list, quiz
+   results, apply-answer buttons, ...). */
+#kme-learning-navigator [hidden] {
+  display: none !important;
+}
+
 .kme-learning-navigator-panel {
   display: none;
   width: min(360px, calc(100vw - 32px));
@@ -53,6 +60,9 @@
 
 .kme-learning-navigator-face-front {
   position: relative;
+  max-height: min(680px, calc(100vh - 64px));
+  padding-right: 2px;
+  overflow-y: auto;
 }
 
 .kme-learning-navigator-face-back {
@@ -182,12 +192,6 @@
   grid-template-columns: 1fr auto;
   gap: 8px;
   margin-bottom: 12px;
-}
-
-/* The grid display above would otherwise override the hidden attribute when the row is
-   suppressed on the home page. */
-.kme-learning-navigator-actions[hidden] {
-  display: none;
 }
 
 .kme-learning-navigator-tasks {
@@ -736,6 +740,14 @@
   height: 7px;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--kme-accent), var(--kme-accent-2));
+}
+
+.kme-learning-navigator-status-text {
+  display: -webkit-box;
+  min-height: 18px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .kme-learning-navigator-logo-toggle {

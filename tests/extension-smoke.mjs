@@ -311,6 +311,100 @@ const timeShortHtml = String.raw`<!doctype html>
 </body>
 </html>`;
 
+const endedRecordedHtml = String.raw`<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>江苏农商联合银行</title>
+  <style>
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    main { padding: 24px; }
+    .course-wrap { display: flex; flex-direction: column; gap: 16px; }
+    .course-main-wrap { display: flex; gap: 24px; }
+    video { display: block; width: 480px; height: 270px; background: #111; }
+    .root__mZMt4 { width: 360px; }
+    .ant5-tabs-tab-btn { display: inline-block; margin-right: 24px; cursor: pointer; }
+    .scrollBody__Jdo84 { margin-top: 18px; min-height: 180px; }
+    .lesson-item { padding: 12px; cursor: pointer; }
+    .lesson-item.active { background: #eff5ff; }
+  </style>
+</head>
+<body>
+<main>
+  <button id="back">返回</button>
+  <section class="course-wrap">
+    <header><strong>延迟完成确认课程</strong><span> 收藏 </span><span>1学时</span></header>
+    <div class="course-main-wrap">
+      <video id="ended-recorded-video"></video>
+      <aside class="root__mZMt4">
+        <nav>
+          <button id="ended-directory-tab" class="ant5-tabs-tab-btn ant5-tabs-tab-active">目录</button>
+          <button id="ended-record-tab" class="ant5-tabs-tab-btn">记录</button>
+          <button class="ant5-tabs-tab-btn">评论</button>
+        </nav>
+        <div id="ended-tab-content" class="scrollBody__Jdo84"></div>
+      </aside>
+    </div>
+  </section>
+</main>
+<script>
+  window.__mockEndedRecordedReplayCount = 0;
+  window.__mockEndedRecordedQuizClickCount = 0;
+  window.__mockEndedRecordedRefreshCount = 0;
+  // KME's wrapped player can still report paused=false at the duration boundary while its
+  // own completion request is settling; this is the state that previously triggered replay.
+  window.__mockEndedRecordedPaused = false;
+  window.__mockEndedRecordedEnded = true;
+  window.__mockEndedRecordedCurrentTime = 2886;
+
+  const endedRecordedVideo = document.getElementById("ended-recorded-video");
+  Object.defineProperty(endedRecordedVideo, "duration", { configurable: true, get: () => 2886 });
+  Object.defineProperty(endedRecordedVideo, "currentTime", {
+    configurable: true,
+    get: () => window.__mockEndedRecordedCurrentTime,
+    set: (value) => { window.__mockEndedRecordedCurrentTime = Number(value) || 0; }
+  });
+  Object.defineProperty(endedRecordedVideo, "paused", { configurable: true, get: () => window.__mockEndedRecordedPaused });
+  Object.defineProperty(endedRecordedVideo, "ended", { configurable: true, get: () => window.__mockEndedRecordedEnded });
+  endedRecordedVideo.play = async () => {
+    window.__mockEndedRecordedReplayCount += 1;
+    window.__mockEndedRecordedPaused = false;
+    window.__mockEndedRecordedEnded = false;
+  };
+  endedRecordedVideo.pause = () => {
+    window.__mockEndedRecordedPaused = true;
+  };
+
+  const endedDirectoryTab = document.getElementById("ended-directory-tab");
+  const endedRecordTab = document.getElementById("ended-record-tab");
+  const endedTabContent = document.getElementById("ended-tab-content");
+  function activateEndedTab(activeTab) {
+    [endedDirectoryTab, endedRecordTab].forEach((tab) => {
+      tab.classList.toggle("ant5-tabs-tab-active", tab === activeTab);
+    });
+  }
+  function renderEndedDirectory() {
+    activateEndedTab(endedDirectoryTab);
+    endedTabContent.innerHTML =
+      '<div class="lesson-item active"><span>延迟完成确认课程视频 00:48:06</span><span>未完成</span></div>' +
+      '<div id="ended-recorded-quiz" class="lesson-item"><span>延迟完成确认课程-测试题</span></div>';
+    document.getElementById("ended-recorded-quiz").addEventListener("click", () => {
+      window.__mockEndedRecordedQuizClickCount += 1;
+    });
+  }
+  endedDirectoryTab.addEventListener("click", renderEndedDirectory);
+  endedRecordTab.addEventListener("click", () => {
+    window.__mockEndedRecordedRefreshCount += 1;
+    activateEndedTab(endedRecordTab);
+    endedTabContent.innerHTML = '<div class="course-records-root__WU_lB">' +
+      '<div>学习次数 33</div><div>学习总时长 01:21:49</div>' +
+      '<div>开始时间 持续时间</div></div>';
+  });
+  renderEndedDirectory();
+</script>
+</body>
+</html>`;
+
 const quizHtml = String.raw`<!doctype html>
 <html>
 <head>
@@ -672,11 +766,13 @@ try {
       ? finalPassedQuizHtml
       : (requestUrl.includes("/stalled-playback")
         ? stalledPlaybackQuizHtml
+        : (requestUrl.includes("/ended-recorded")
+          ? endedRecordedHtml
         : (requestUrl.includes("/time-short")
           ? timeShortHtml
           : (requestUrl.includes("/quiz-ai")
             ? quizHtml
-            : (requestUrl.includes("/home/index") ? homeHtml : html))));
+            : (requestUrl.includes("/home/index") ? homeHtml : html)))));
     route.fulfill({ status: 200, contentType: "text/html", body });
   });
 
@@ -710,6 +806,10 @@ try {
   }
 
   await homePage.locator(".kme-learning-navigator-task-cancel").click();
+  await homePage.waitForSelector(".kme-learning-navigator-task-confirmation", { state: "hidden", timeout: 5000 });
+  await homePage.locator(".kme-learning-navigator-task-item").click();
+  await homePage.waitForSelector(".kme-learning-navigator-task-confirmation", { state: "visible", timeout: 5000 });
+  await homePage.keyboard.press("Escape");
   await homePage.waitForSelector(".kme-learning-navigator-task-confirmation", { state: "hidden", timeout: 5000 });
   await homePage.locator(".kme-learning-navigator-task-item").click();
   await homePage.locator(".kme-learning-navigator-task-confirm").click();
@@ -789,10 +889,8 @@ try {
       throw new Error(`userscript assets failed: ${JSON.stringify(assets)}`);
     }
   }
-  await page.evaluate(() => {
-    document.querySelector(".kme-learning-navigator-logo-toggle")
-      ?.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
-  });
+  // Restore is click-only now (hover no longer pops the panel open).
+  await page.locator(".kme-learning-navigator-logo-toggle").click();
   await page.waitForSelector(".kme-learning-navigator-panel", { state: "visible", timeout: 5000 });
 
   await page.locator(".kme-learning-navigator-primary").click();
@@ -847,10 +945,8 @@ try {
   // A course player page is not the directory, so the panel starts minimized; restore it
   // before driving the controls.
   await timePage.waitForSelector(".kme-learning-navigator-panel", { state: "hidden", timeout: 5000 });
-  await timePage.evaluate(() => {
-    document.querySelector(".kme-learning-navigator-logo-toggle")
-      ?.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
-  });
+  // Restore is click-only now (hover no longer pops the panel open).
+  await timePage.locator(".kme-learning-navigator-logo-toggle").click();
   await timePage.waitForSelector(".kme-learning-navigator-panel", { state: "visible", timeout: 5000 });
   await timePage.locator(".kme-learning-navigator-primary").click();
   await timePage.waitForFunction(() => window.__mockReplayCount > 0, undefined, { timeout: 10000 });
@@ -876,6 +972,56 @@ try {
     throw new Error(`stale course record refresh failed: ${JSON.stringify(timeState)}`);
   }
 
+  // KME can save a full video's watch time before its directory checkmark appears. Once
+  // the server-side course record already covers the real directory duration, the helper
+  // must advance to the quiz without rewinding the finished video to zero.
+  const endedRecordedPage = await context.newPage();
+  await endedRecordedPage.goto("https://pc.kmelearning.com/jsncxyslhs/home/course/ended-recorded");
+  await endedRecordedPage.evaluate((currentTarget) => {
+    const settings = {
+      running: false,
+      nextDelayMs: 50,
+      completionConfirmWaitMs: 100
+    };
+    if (currentTarget === "userscript") Object.assign(window.__mockUserscriptStorage, settings);
+    else Object.assign(window.__mockChromeStorage, settings);
+  }, target);
+  await injectHelper(endedRecordedPage);
+  await endedRecordedPage.waitForSelector("#kme-learning-navigator", { timeout: 10000 });
+  await endedRecordedPage.evaluate(() => window.__kmeLearningNavigator.start());
+  try {
+    await endedRecordedPage.waitForFunction(() => (
+      window.__mockEndedRecordedQuizClickCount > 0 || window.__mockEndedRecordedReplayCount > 0
+    ), undefined, { timeout: 10000 });
+  } catch {
+    const diagnostics = await endedRecordedPage.evaluate(() => ({
+      replayCount: window.__mockEndedRecordedReplayCount,
+      quizClickCount: window.__mockEndedRecordedQuizClickCount,
+      recordRefreshCount: window.__mockEndedRecordedRefreshCount,
+      currentTime: window.__mockEndedRecordedCurrentTime,
+      status: document.querySelector("#kme-learning-navigator-status")?.innerText || "",
+      body: document.body.innerText,
+      inspect: window.__kmeLearningNavigator?.inspect?.()
+    }));
+    throw new Error(`ended video record confirmation timed out: ${JSON.stringify(diagnostics)}`);
+  }
+  const endedRecordedState = await endedRecordedPage.evaluate(() => ({
+    replayCount: window.__mockEndedRecordedReplayCount,
+    quizClickCount: window.__mockEndedRecordedQuizClickCount,
+    recordRefreshCount: window.__mockEndedRecordedRefreshCount,
+    currentTime: window.__mockEndedRecordedCurrentTime,
+    status: document.querySelector("#kme-learning-navigator-status")?.innerText || "",
+    inspect: window.__kmeLearningNavigator?.inspect?.()
+  }));
+  if (endedRecordedState.replayCount !== 0 ||
+      endedRecordedState.quizClickCount !== 1 ||
+      endedRecordedState.recordRefreshCount < 1 ||
+      endedRecordedState.currentTime !== 2886 ||
+      endedRecordedState.inspect?.timeRequirement?.requiredSeconds !== 2886 ||
+      endedRecordedState.inspect?.timeRequirement?.learnedSeconds !== 4909) {
+    throw new Error(`ended video record confirmation failed: ${JSON.stringify(endedRecordedState)}`);
+  }
+
   // A KME player can be torn down while its play() Promise is still pending. The old video
   // must not keep the global tick busy forever; once the quiz DOM replaces it, automatic
   // answering should close the notice, call the model, submit once and continue once.
@@ -891,7 +1037,8 @@ try {
       aiModel: "mock-answer-model",
       aiRememberApiKey: true,
       aiApiKey: "test-only-key",
-      nextDelayMs: 50
+      nextDelayMs: 50,
+      completionConfirmWaitMs: 50
     };
     if (currentTarget === "userscript") Object.assign(window.__mockUserscriptStorage, settings);
     else Object.assign(window.__mockChromeStorage, settings);
@@ -975,8 +1122,10 @@ try {
       finalQuizReturn.previousVideoClickCount !== 0 ||
       finalQuizReturn.reminderVisible ||
       !finalQuizReturn.returned ||
-      finalQuizReturn.inspect?.timeRequirement?.requiredSeconds !== 3047 ||
-      finalQuizReturn.inspect?.timeRequirement?.learnedSeconds !== 3050) {
+      // Returning clears the finished course's time summary so the next course cannot
+      // inherit stale values in the floating panel.
+      finalQuizReturn.inspect?.timeRequirement?.requiredSeconds !== 0 ||
+      finalQuizReturn.inspect?.timeRequirement?.learnedSeconds !== 0) {
     throw new Error(`final passed quiz return failed: ${JSON.stringify(finalQuizReturn)}`);
   }
 
@@ -1161,9 +1310,10 @@ try {
   const autoModeUi = await autoQuizPage.evaluate(() => ({
     enabled: document.querySelector('[data-kme-learning-navigator-setting="aiQuizAutoSubmit"]')?.checked,
     analyzeHidden: document.querySelector("#kme-learning-navigator-quiz-analyze")?.hidden,
+    applyActionsDisplay: getComputedStyle(document.querySelector("#kme-learning-navigator-quiz-apply-actions")).display,
     inspect: window.__kmeLearningNavigator?.inspect?.()
   }));
-  if (!autoModeUi.enabled || !autoModeUi.analyzeHidden || autoModeUi.inspect?.quiz?.autoSubmit !== true) {
+  if (!autoModeUi.enabled || !autoModeUi.analyzeHidden || autoModeUi.applyActionsDisplay !== "none" || autoModeUi.inspect?.quiz?.autoSubmit !== true) {
     throw new Error(`automatic quiz mode UI failed: ${JSON.stringify(autoModeUi)}`);
   }
   await autoQuizPage.locator(".kme-learning-navigator-primary").click();
@@ -1297,6 +1447,13 @@ try {
       recordRefreshCount: timeState.recordRefreshCount,
       requiredSeconds: timeState.inspect.timeRequirement.requiredSeconds,
       learnedSeconds: timeState.inspect.timeRequirement.learnedSeconds
+    },
+    endedRecorded: {
+      replayCount: endedRecordedState.replayCount,
+      quizClickCount: endedRecordedState.quizClickCount,
+      recordRefreshCount: endedRecordedState.recordRefreshCount,
+      requiredSeconds: endedRecordedState.inspect.timeRequirement.requiredSeconds,
+      learnedSeconds: endedRecordedState.inspect.timeRequirement.learnedSeconds
     },
     stalledPlaybackRecovery: {
       stalledPlayCount: stalledPlaybackRecovery.stalledPlayCount,
