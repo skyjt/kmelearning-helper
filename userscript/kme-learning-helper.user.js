@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         KME 学习助手
 // @namespace    https://github.com/skyjt/kmelearning-helper
-// @version      2.10.1
+// @version      2.11.0
 // @description  自动学习 KME 课程，并通过用户配置的大模型完成可见测验和后续课程。
 // @author       skyjt
 // @license      MIT
@@ -173,6 +173,8 @@
     panelTimer: 0,
     flipped: false,
     flipTimer: 0,
+    titleBase: "",
+    titleOverride: "",
     homeTaskSignature: "",
     pendingHomeTaskKey: "",
     taskPanelAutoOpenedUrl: "",
@@ -2114,6 +2116,9 @@
 
   function updatePanelSummary() {
     updateHomeTaskDisplay();
+    // The tab title mirrors progress even while the panel is minimized, so keep it fresh
+    // before the early return below.
+    syncDocumentTitle();
     // Panel content is display:none while minimized; skip the expensive DOM scans until the
     // user restores it (restore() calls this again to refresh).
     if (!state.panelOpen) return;
@@ -2168,6 +2173,32 @@
     fill.style.width = `${progress.percent}%`;
   }
 
+  // Mirror the automation state into the tab title, so progress is visible on the tab strip
+  // without opening the page. The SPA may rewrite document.title at any moment, so remember
+  // the exact string we last set (state.titleOverride); any other value is treated as the
+  // page's own new title and adopted as the base we prefix.
+  function syncDocumentTitle() {
+    const current = document.title;
+    if (current !== state.titleOverride) state.titleBase = current;
+
+    if (!state.settings.running) {
+      // Stopped: restore the page's own title if our prefix is still the one showing.
+      if (state.titleOverride && current === state.titleOverride) {
+        document.title = state.titleBase;
+      }
+      state.titleOverride = "";
+      return;
+    }
+
+    const progress = currentLearningProgress();
+    const label = progress.total
+      ? `【自动学习中 ${progress.completed}/${progress.total}·${progress.percent}%】`
+      : "【自动学习中】";
+    const next = `${label}${state.titleBase}`;
+    if (current !== next) document.title = next;
+    state.titleOverride = next;
+  }
+
   // Reflect the running flag without tearing down and rebuilding the whole panel on every
   // start/stop. Only the primary button label/state and the logo status dot change.
   function syncRunningUI() {
@@ -2181,6 +2212,7 @@
     document.querySelectorAll(`.${EXT_ID}-task-item`).forEach((button) => {
       button.disabled = state.settings.running;
     });
+    syncDocumentTitle();
   }
 
   // The floating panel should only auto-expand on the training "study" page — the real

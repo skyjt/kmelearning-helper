@@ -4,7 +4,7 @@
 
 **把「点开 → 等播完 → 返回 → 下一门」的机械重复交给浏览器，把时间还给你。**
 
-[![版本](https://img.shields.io/badge/版本-v2.10.1-1f6feb)](https://github.com/skyjt/kmelearning-helper/releases/latest)
+[![版本](https://img.shields.io/badge/版本-v2.11.0-1f6feb)](https://github.com/skyjt/kmelearning-helper/releases/latest)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-4285F4?logo=googlechrome&logoColor=white)](https://github.com/skyjt/kmelearning-helper/releases/latest)
 [![油猴脚本](https://img.shields.io/badge/Tampermonkey-支持-00485B?logo=tampermonkey&logoColor=white)](https://raw.githubusercontent.com/skyjt/kmelearning-helper/main/userscript/kme-learning-helper.user.js)
@@ -121,6 +121,7 @@ ZIP 不能直接加载，必须先解压。更新时下载新包解压替换原�
 | 🤖 | **AI 自动答题** | 可配置 OpenAI-compatible 模型，提取单选、多选和判断题，自动填写并提交 |
 | 🔄 | **通过后续学** | 测验通过后自动进入下一项；模型分析失败最多重试两次 |
 | ⏭️ | **跳过做题页** | 不使用 AI 时，自动跳过考试、测验、问卷、作业 |
+| 🏷️ | **标签页进度提示** | 自动学习时标签页标题实时显示「自动学习中 + 课程进度」，不用点开页面 |
 | 🛡️ | **1x 稳过保障** | 默认抵消第三方倍速带来的「播完却不算完成」问题 |
 
 ### 设置项
@@ -188,10 +189,11 @@ ZIP 不能直接加载，必须先解压。更新时下载新包解压替换原�
 
 ## 最近更新
 
-最近一次更新（**v2.10.1**）：修复课程目录中的“测试题”未进入后续导航候选，视频完成后现在会继续进入测试题页面。
+最近一次更新（**v2.11.0**）：自动学习时标签页标题实时显示「自动学习中 + 课程进度」，不用点开页面就能在标签栏看到学到哪了；停止后恢复原标题。
 
 | 版本 | 主要变化 |
 | --- | --- |
+| **v2.11.0** | 自动学习时标签页标题实时显示「自动学习中 + 课程进度」，停止后恢复原标题 |
 | **v2.10.x** | 统一「项目 / 课程 / 小节」层级，精简首页浮窗，补齐「测试题」目录识别 |
 | **v2.9.x** | 全自动答题、提交与通过后续学流程，优化异步结果判断 |
 | **v2.8.x** | OpenAI-compatible 模型配置、连接测试和手动回填 |

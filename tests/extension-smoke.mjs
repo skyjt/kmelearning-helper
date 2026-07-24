@@ -633,6 +633,8 @@ try {
       : window.__mockChromeStorage.running === true
   ), target, { timeout: 5000 });
   await page.waitForFunction(() => document.body.innerText.includes("课程内容：网络安全意识专题培训"), undefined, { timeout: 10000 });
+  // The tab title mirrors the running state, so the user can watch progress on the tab strip.
+  await page.waitForFunction(() => document.title.startsWith("【自动学习中"), undefined, { timeout: 5000 });
   await page.waitForFunction(() => document.body.innerText.includes("课程内容：电子邮件安全"), undefined, { timeout: 20000 });
 
   // Auto-learning is now on a course player page (/home/course/...), which is not the
@@ -659,6 +661,14 @@ try {
   }
   if (!finalState.progress || finalState.progress.completed !== 2 || finalState.progress.total !== 3) {
     throw new Error(`final progress failed: ${JSON.stringify(finalState.progress)}`);
+  }
+
+  // With 2 of 3 courses complete, the tab title should carry the live progress label
+  // prefixed onto the page's own title.
+  await page.waitForFunction(() => document.title.includes("2/3"), undefined, { timeout: 5000 });
+  const finalTitle = await page.evaluate(() => document.title);
+  if (!finalTitle.startsWith("【自动学习中 2/3·67%】") || !finalTitle.includes("江苏农商联合银行")) {
+    throw new Error(`tab title progress failed: ${finalTitle}`);
   }
 
   const timePage = await context.newPage();
