@@ -119,6 +119,29 @@
     };
   }
 
+  // Same epoch / TTL guard as memoScan(), but keyed per element: several helpers inspect the
+  // same rows in one pass, and every read below (innerText, getComputedStyle,
+  // getBoundingClientRect) forces style or layout work, so each element should only pay once.
+  function elementMemo(compute, ttl = 200) {
+    let cache = new WeakMap();
+    let epoch = -1;
+    let at = 0;
+    return (el) => {
+      const t = Date.now();
+      if (epoch !== domEpoch || t - at > ttl) {
+        cache = new WeakMap();
+        epoch = domEpoch;
+        at = t;
+      }
+      let value = cache.get(el);
+      if (value === undefined) {
+        value = compute(el);
+        cache.set(el, value);
+      }
+      return value;
+    };
+  }
+
   const storageArea = () => {
     try {
       return chrome.storage.local || chrome.storage.sync;
@@ -260,23 +283,9 @@
   // innerText forces a reflow and is one of the hottest calls in the script (every row,
   // every dedupe pass). Cache per-element text for the current epoch / TTL window so the
   // same elements scanned by several helpers in one pass only pay the cost once.
-  let textCache = new WeakMap();
-  let textCacheEpoch = -1;
-  let textCacheAt = 0;
+  const elementText = elementMemo((el) => normalize(el.innerText || el.textContent || ""));
   function textOf(el) {
-    if (!el) return "";
-    const t = Date.now();
-    if (textCacheEpoch !== domEpoch || t - textCacheAt > 200) {
-      textCache = new WeakMap();
-      textCacheEpoch = domEpoch;
-      textCacheAt = t;
-    }
-    let value = textCache.get(el);
-    if (value === undefined) {
-      value = normalize(el.innerText || el.textContent || "");
-      textCache.set(el, value);
-    }
-    return value;
+    return el ? elementText(el) : "";
   }
   const bodyText = memoScan(() => textOf(document.body));
   const formatSeconds = (seconds) => {
@@ -310,12 +319,21 @@
     return maxSeconds;
   }
 
-  function visible(el) {
-    if (!el || !(el instanceof Element)) return false;
+  // visible() is the filter in front of nearly every scan in this file, and both reads below
+  // force style/layout work, so memoize it exactly like textOf(). The TTL half of the guard
+  // carries real weight here: scrolling moves every rect without producing a mutation record,
+  // so keepDocumentActive()'s smooth scroll must not be able to pin a stale answer for longer
+  // than one scan window.
+  const elementVisible = elementMemo((el) => {
     const style = getComputedStyle(el);
     if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return false;
     const rect = el.getBoundingClientRect();
     return rect.width > 1 && rect.height > 1 && rect.bottom > 0 && rect.right > 0;
+  });
+
+  function visible(el) {
+    if (!el || !(el instanceof Element)) return false;
+    return elementVisible(el);
   }
 
   function runtimePatch(patch) {
@@ -805,15 +823,35 @@
     state.quizError = "";
     state.quizMessage = `正在填写 ${applicable.length} 道题…`;
     updateQuizDisplay(true);
+    // The extraction above seeds the whole pass and is only redone once the page has actually
+    // replaced the nodes we are about to touch. Re-extracting before every option used to cost
+    // a full quiz walk (every control -> every ancestor -> quizHeading's own innerText scan)
+    // per click, so a 20-question paper paid ~40 walks where one suffices.
+    const indexQuestions = (list) => {
+      const map = new Map();
+      for (const item of list) {
+        if (!map.has(item.number)) map.set(item.number, item);
+      }
+      return map;
+    };
+    let byNumber = indexQuestions(questions);
+    const liveQuestion = (number) => {
+      const cached = byNumber.get(number);
+      if (cached?.options.every((option) => option.input.isConnected && option.clickTarget.isConnected)) {
+        return cached;
+      }
+      byNumber = indexQuestions(extractQuizQuestions());
+      return byNumber.get(number) || null;
+    };
+
     for (const answer of applicable) {
-      let question = extractQuizQuestions().find((item) => item.number === answer.question);
+      const question = liveQuestion(answer.question);
       if (!question) continue;
       const desired = new Set(answer.selected);
       if (question.type === "multiple") {
         const labels = question.options.map((option) => option.label);
         for (const label of labels) {
-          question = extractQuizQuestions().find((item) => item.number === answer.question);
-          const option = question?.options.find((item) => item.label === label);
+          const option = liveQuestion(answer.question)?.options.find((item) => item.label === label);
           if (!option) continue;
           if (option.input.checked !== desired.has(option.label)) {
             option.clickTarget.click();
@@ -821,8 +859,7 @@
           }
         }
       } else {
-        question = extractQuizQuestions().find((item) => item.number === answer.question);
-        const option = question?.options.find((item) => desired.has(item.label));
+        const option = question.options.find((item) => desired.has(item.label));
         if (option && !option.input.checked) {
           option.clickTarget.click();
           await sleep(35);
@@ -864,11 +901,23 @@
     }
   }
 
+  // Every anchored result pattern inside quizResultStatus() needs one of these keywords within
+  // a couple of characters, so this stays a strict superset of what the per-element scan can
+  // match while being cheap enough to run against the whole page text.
+  const QUIZ_RESULT_HINT = /很遗憾|未达到|(?:测验|考试|答题)[\s\S]{0,8}(?:通过|合格|完成)|(?:通过|合格|完成)[\s\S]{0,8}(?:测验|考试|答题)/;
+
   function quizResultStatus() {
-    const feedbackTexts = [...document.querySelectorAll("div, p, span, h1, h2, h3, h4")]
-      .filter((el) => visible(el) && !state.rootEl?.contains(el))
-      .map((el) => textOf(el))
-      .filter((text) => text.length >= 2 && text.length <= 120);
+    // A result banner is short, visible text, so it is always part of document.body's
+    // innerText. Gate the per-element walk (getComputedStyle + innerText over every div, p and
+    // span on the page) on that already-cached whole-page text: while the platform is still
+    // grading — exactly when this runs on a 250ms / 400ms poll — nothing matches and the walk
+    // is skipped. A false positive only costs the scan this function always used to do.
+    const feedbackTexts = QUIZ_RESULT_HINT.test(bodyText())
+      ? [...document.querySelectorAll("div, p, span, h1, h2, h3, h4")]
+        .filter((el) => visible(el) && !state.rootEl?.contains(el))
+        .map((el) => textOf(el))
+        .filter((text) => text.length >= 2 && text.length <= 120)
+      : [];
     if (feedbackTexts.some((text) => (
       /^(?:恭喜(?:您|你)?[，,!！\s]*)?(?:本次)?(?:测验|考试|答题)(?:已)?(?:通过|合格)(?=$|[\s，,。.!！：:])/.test(text) ||
       /^恭喜(?:您|你)?(?:已)?通过(?:本次)?(?:测验|考试|答题)/.test(text)
