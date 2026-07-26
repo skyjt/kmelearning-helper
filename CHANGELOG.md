@@ -3,6 +3,11 @@
 本文件记录 KME 学习助手（kmelearning-helper / KME Learning Navigator）各版本的主要变化。
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.12.2] - 2026-07-26
+
+### 变更（Changed）
+- 题干与选项文本改用带缓存的 `textOf()` 读取，不再直接访问 `innerText`。解析一道题时会对同一批祖先元素反复调用 `quizHeading()`，这些重复的强制回流现在由缓存吸收；识别结果不变。
+
 ## [2.12.1] - 2026-07-26
 
 ### 变更（Changed）

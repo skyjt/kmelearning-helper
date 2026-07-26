@@ -454,7 +454,7 @@
     const pattern = /^(\d+)\.\s*[（(]\s*(单选题|多选题|判断题)\s*[）)]\s*([\s\S]+)$/;
     const candidates = [container, ...container.querySelectorAll("div, p, h1, h2, h3, h4")]
       .filter((el) => !el.querySelector("input[type='radio'], input[type='checkbox']"))
-      .map((el) => normalize(el.innerText || el.textContent || ""))
+      .map((el) => textOf(el))
       .filter((text) => pattern.test(text))
       .sort((a, b) => a.length - b.length);
     const match = candidates[0]?.match(pattern);
@@ -511,7 +511,7 @@
       const options = [...container.querySelectorAll("label")]
         .map((label, index) => {
           const input = label.querySelector("input[type='radio'], input[type='checkbox']");
-          const text = normalize(label.innerText || label.textContent || "");
+          const text = textOf(label);
           if (!input || !text) return null;
           return {
             label: String.fromCharCode(65 + index),
