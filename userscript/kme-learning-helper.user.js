@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         KME 学习助手
 // @namespace    https://github.com/skyjt/kmelearning-helper
-// @version      2.12.2
+// @version      2.12.3
 // @description  自动学习 KME 课程，并通过用户配置的大模型完成可见测验和后续课程。
 // @author       skyjt
 // @license      MIT
@@ -1105,11 +1105,20 @@
     return false;
   }
 
-  async function waitForQuizResult(startUrl) {
+  async function waitForQuizResult(startUrl, confirmationClicked) {
     const startedAt = now();
-    while (now() - startedAt < AI_QUIZ_RESULT_WAIT_MS) {
+    let deadline = startedAt + AI_QUIZ_RESULT_WAIT_MS;
+    while (now() < deadline) {
       await sleep(400);
       invalidateScans();
+      if (!confirmationClicked) {
+        const confirm = quizSubmitConfirmationButton();
+        if (confirm) {
+          confirm.click();
+          confirmationClicked = true;
+          deadline = now() + AI_QUIZ_RESULT_WAIT_MS;
+        }
+      }
       const result = quizResultStatus();
       if (result !== "pending") return result;
       if (now() - startedAt > 1000 && location.href !== startUrl && !pageLooksQuestion()) return "navigated";
@@ -1131,6 +1140,7 @@
     state.quizSubmittedAt = now();
     state.quizFailureSeenAt = 0;
 
+    let confirmationClicked = false;
     for (let index = 0; index < 12; index += 1) {
       await sleep(250);
       invalidateScans();
@@ -1138,6 +1148,7 @@
       const confirm = quizSubmitConfirmationButton();
       if (confirm) {
         confirm.click();
+        confirmationClicked = true;
         break;
       }
     }
@@ -1146,7 +1157,7 @@
     state.quizMessage = "答案已提交，正在等待测验结果…";
     setStatus(state.quizMessage);
     updateQuizDisplay(true);
-    return waitForQuizResult(startUrl);
+    return waitForQuizResult(startUrl, confirmationClicked);
   }
 
   function automaticQuizActive() {

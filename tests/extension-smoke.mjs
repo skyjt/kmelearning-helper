@@ -474,6 +474,7 @@ const quizHtml = String.raw`<!doctype html>
   window.__mockQuizSubmitCount = 0;
   window.__mockQuizConfirmCount = 0;
   window.__mockQuizNoticeCloseCount = 0;
+  window.__mockQuizConfirmDelayMs = 0;
   window.__mockNextLessonCount = 0;
   window.__mockSubmittedSelections = [];
   window.__mockAiResponse = ${JSON.stringify(String.raw`\`\`\`json
@@ -487,7 +488,9 @@ const quizHtml = String.raw`<!doctype html>
 \`\`\``)};
   document.getElementById("quiz-submit").addEventListener("click", () => {
     window.__mockQuizSubmitCount += 1;
-    document.getElementById("quiz-confirm").style.display = "block";
+    window.setTimeout(() => {
+      document.getElementById("quiz-confirm").style.display = "block";
+    }, window.__mockQuizConfirmDelayMs);
   });
   document.getElementById("quiz-notice-close").addEventListener("click", () => {
     window.__mockQuizNoticeCloseCount += 1;
@@ -1293,6 +1296,7 @@ try {
   const autoQuizPage = await context.newPage();
   await autoQuizPage.goto("https://pc.kmelearning.com/jsncxyslhs/home/course/quiz-ai-auto");
   await autoQuizPage.evaluate((currentTarget) => {
+    window.__mockQuizConfirmDelayMs = 3500;
     const settings = {
       aiQuizEnabled: true,
       aiQuizAutoSubmit: true,
