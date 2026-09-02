@@ -24,7 +24,7 @@
   const AI_QUIZ_CONFIDENCE_THRESHOLD = 0.65;
   const AI_REQUEST_TIMEOUT_MS = 60000;
   const AI_QUIZ_RESULT_WAIT_MS = 20000;
-  const AI_QUIZ_MAX_ANALYSIS_ATTEMPTS = 2;
+  const AI_RETRY_DELAYS_MS = [800, 1600, 3200];
   const AI_QUIZ_FAILURE_STABILITY_MS = 2500;
   const STORAGE_OPERATION_TIMEOUT_MS = 3000;
   const MEDIA_PLAY_TIMEOUT_MS = 5000;
@@ -38,6 +38,8 @@
     aiQuizAutoSubmit: true,
     aiEndpoint: "https://api.openai.com/v1/chat/completions",
     aiModel: "",
+    aiReasoningEffort: "auto",
+    aiRetryCount: 1,
     aiRememberApiKey: false,
     aiApiKey: "",
     panelOpen: true,
@@ -191,6 +193,12 @@
     }
   };
 
+  function modelRequestError(message, retryable = true) {
+    const error = new Error(message);
+    error.retryable = retryable;
+    return error;
+  }
+
   async function modelHttpRequest({ url, headers, body, timeoutMs = AI_REQUEST_TIMEOUT_MS }) {
     if (typeof KME_USERSCRIPT_HTTP_REQUEST === "function") {
       return KME_USERSCRIPT_HTTP_REQUEST({
@@ -218,10 +226,10 @@
         responseText: await response.text()
       };
     } catch (error) {
-      if (error?.name === "AbortError") throw new Error("模型请求超时，请稍后重试");
+      if (error?.name === "AbortError") throw modelRequestError("模型请求超时，请稍后重试");
       // Only the extension reaches this fetch path (the userscript delegates to
       // GM_xmlhttpRequest above), so the guidance is about CORS, not @connect.
-      throw new Error("模型接口请求失败，请检查网络，或确认模型接口允许浏览器跨域访问");
+      throw modelRequestError("模型接口请求失败，请检查网络，或确认模型接口允许浏览器跨域访问");
     } finally {
       window.clearTimeout(timer);
     }
@@ -554,24 +562,56 @@
   function validateAiConfig() {
     const endpoint = normalize(String(state.settings.aiEndpoint || ""));
     const model = normalize(String(state.settings.aiModel || ""));
-    if (!endpoint) throw new Error("请先填写模型接口地址");
-    if (!model) throw new Error("请先填写模型名称");
+    if (!endpoint) throw modelRequestError("请先填写模型接口地址", false);
+    if (!model) throw modelRequestError("请先填写模型名称", false);
 
     let parsed;
     try {
       parsed = new URL(endpoint);
     } catch {
-      throw new Error("模型接口地址格式不正确");
+      throw modelRequestError("模型接口地址格式不正确", false);
     }
     const localHttp = parsed.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname);
     if (parsed.protocol !== "https:" && !localHttp) {
-      throw new Error("远程模型接口必须使用 HTTPS；本机接口可使用 localhost HTTP");
+      throw modelRequestError("远程模型接口必须使用 HTTPS；本机接口可使用 localhost HTTP", false);
     }
+    const reasoningEffort = ["none", "low", "medium", "high"].includes(state.settings.aiReasoningEffort)
+      ? state.settings.aiReasoningEffort
+      : "auto";
     return {
       endpoint: parsed.href,
       model,
+      reasoningEffort,
       apiKey: state.aiSessionApiKey.trim()
     };
+  }
+
+  function aiRetryCount() {
+    return Math.min(AI_RETRY_DELAYS_MS.length, Math.max(0, Math.trunc(Number(state.settings.aiRetryCount) || 0)));
+  }
+
+  function aiErrorText(value) {
+    if (typeof value === "string") return value;
+    if (value === undefined || value === null) return "";
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+
+  function upstreamAiError(data, responseText, statusText, apiKey) {
+    let detail = [
+      data?.error?.message,
+      data?.error?.detail,
+      data?.message,
+      data?.detail,
+      data?.error,
+      responseText,
+      statusText
+    ].map(aiErrorText).map(normalize).find(Boolean) || "";
+    if (apiKey) detail = detail.split(apiKey).join("***");
+    return detail.slice(0, 600);
   }
 
   function aiResponseContent(data) {
@@ -591,32 +631,46 @@
       "Content-Type": "application/json"
     };
     if (config.apiKey) headers.Authorization = `Bearer ${config.apiKey}`;
+    const requestBody = {
+      model: config.model,
+      messages,
+      stream: false
+    };
+    if (config.reasoningEffort !== "auto") requestBody.reasoning_effort = config.reasoningEffort;
     const response = await modelHttpRequest({
       url: config.endpoint,
       headers,
-      body: JSON.stringify({
-        model: config.model,
-        messages,
-        stream: false
-      })
+      body: JSON.stringify(requestBody)
     });
 
+    const responseText = String(response.responseText || "");
     let data;
     try {
-      data = JSON.parse(response.responseText || "{}");
+      data = JSON.parse(responseText || "{}");
     } catch {
+      const detail = upstreamAiError(null, responseText, response.statusText, config.apiKey);
       if (response.status < 200 || response.status >= 300) {
-        throw new Error(`模型接口返回 HTTP ${response.status}`);
+        const retryable = response.status === 0 || response.status === 408 || response.status === 409 ||
+          response.status === 425 || response.status === 429 || response.status >= 500;
+        throw modelRequestError(`模型接口返回 HTTP ${response.status}${detail ? `：${detail}` : ""}`, retryable);
       }
-      throw new Error("模型接口没有返回有效 JSON");
+      throw modelRequestError(`模型接口没有返回有效 JSON${detail ? `：${detail}` : ""}`);
     }
     if (response.status < 200 || response.status >= 300) {
-      let detail = normalize(data?.error?.message || response.statusText || "请求失败").slice(0, 180);
-      if (config.apiKey) detail = detail.split(config.apiKey).join("***");
-      throw new Error(`模型接口返回 HTTP ${response.status}${detail ? `：${detail}` : ""}`);
+      const detail = upstreamAiError(data, responseText, response.statusText || "请求失败", config.apiKey);
+      const retryable = response.status === 0 || response.status === 408 || response.status === 409 ||
+        response.status === 425 || response.status === 429 || response.status >= 500;
+      throw modelRequestError(`模型接口返回 HTTP ${response.status}${detail ? `：${detail}` : ""}`, retryable);
+    }
+    if (data?.error) {
+      const detail = upstreamAiError(data, responseText, response.statusText, config.apiKey);
+      throw modelRequestError(`模型接口返回错误${detail ? `：${detail}` : ""}`, false);
     }
     const content = aiResponseContent(data);
-    if (!content) throw new Error("模型响应里没有找到回答内容");
+    if (!content) {
+      const detail = upstreamAiError(data, "", response.statusText, config.apiKey);
+      throw modelRequestError(`模型响应里没有找到回答内容${detail ? `：${detail}` : ""}`);
+    }
     return content;
   }
 
@@ -737,24 +791,47 @@
     const fingerprint = quizFingerprint(questions);
     resetQuizResult(fingerprint, questions);
     state.quizBusy = true;
-    state.quizMessage = `正在请求模型分析 ${questions.length} 道题…`;
-    setStatus(state.quizMessage);
-    updateQuizDisplay(true);
+    state.quizAutoAttempts = 0;
+    const maxAttempts = aiRetryCount() + 1;
+    let completed = false;
     try {
-      const content = await requestAiContent(quizMessages(questions));
-      const answers = validateAiAnswers(parseAiJson(content), questions);
-      state.quizAnswers = answers;
-      const valid = answers.filter((answer) => answer.valid).length;
-      const low = answers.filter((answer) => answer.valid && answer.confidence < AI_QUIZ_CONFIDENCE_THRESHOLD).length;
-      state.quizMessage = `AI 已返回 ${valid}/${questions.length} 题${low ? `，其中 ${low} 题置信度较低` : ""}`;
-      state.quizError = valid ? "" : "模型没有返回可用答案";
-      setStatus(state.quizMessage);
-      return valid === questions.length;
-    } catch (error) {
-      state.quizError = normalize(error?.message || "AI 分析失败");
-      state.quizMessage = "";
-      setStatus(`AI 分析失败：${state.quizError}`);
-      return false;
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        state.quizAutoAttempts = attempt;
+        state.quizAnswers = [];
+        state.quizError = "";
+        state.quizMessage = attempt === 1
+          ? `正在请求模型分析 ${questions.length} 道题…`
+          : `正在进行第 ${attempt}/${maxAttempts} 次模型分析…`;
+        setStatus(state.quizMessage);
+        updateQuizDisplay(true);
+
+        let retryable = true;
+        try {
+          const content = await requestAiContent(quizMessages(questions));
+          const answers = validateAiAnswers(parseAiJson(content), questions);
+          state.quizAnswers = answers;
+          const valid = answers.filter((answer) => answer.valid).length;
+          const low = answers.filter((answer) => answer.valid && answer.confidence < AI_QUIZ_CONFIDENCE_THRESHOLD).length;
+          state.quizMessage = `AI 已返回 ${valid}/${questions.length} 题${low ? `，其中 ${low} 题置信度较低` : ""}`;
+          state.quizError = valid === questions.length ? "" : `模型只返回了 ${valid}/${questions.length} 道有效答案`;
+          completed = valid === questions.length;
+        } catch (error) {
+          state.quizError = normalize(error?.message || "AI 分析失败");
+          state.quizMessage = "";
+          retryable = error?.retryable !== false;
+        }
+
+        if (completed || !retryable || attempt >= maxAttempts) break;
+        const delayMs = AI_RETRY_DELAYS_MS[attempt - 1];
+        state.quizMessage = `第 ${attempt} 次分析失败，${delayMs / 1000} 秒后重试 (${attempt + 1}/${maxAttempts})`;
+        setStatus(`${state.quizMessage}：${state.quizError}`);
+        updateQuizDisplay(true);
+        await sleep(delayMs);
+      }
+
+      if (completed) setStatus(state.quizMessage);
+      else setStatus(`AI 分析失败：${state.quizError || "模型没有返回可用答案"}`);
+      return completed;
     } finally {
       state.quizBusy = false;
       state.quizRenderSignature = "";
@@ -1076,20 +1153,8 @@
       return;
     }
 
-    let analyzed = false;
-    for (let attempt = 1; attempt <= AI_QUIZ_MAX_ANALYSIS_ATTEMPTS; attempt += 1) {
-      state.quizAutoAttempts = attempt;
-      state.quizAutoPhase = "analyzing";
-      analyzed = await analyzeQuiz();
-      if (analyzed || !automaticQuizActive()) break;
-      if (attempt < AI_QUIZ_MAX_ANALYSIS_ATTEMPTS) {
-        state.quizError = "";
-        state.quizMessage = `AI 分析失败，正在进行第 ${attempt + 1} 次尝试…`;
-        setStatus(state.quizMessage);
-        updateQuizDisplay(true);
-        await sleep(1200);
-      }
-    }
+    state.quizAutoPhase = "analyzing";
+    const analyzed = await analyzeQuiz();
     if (!automaticQuizActive()) {
       state.quizAutoPhase = "idle";
       return;
@@ -2523,9 +2588,9 @@
     label.textContent = labelText;
     const input = document.createElement("input");
     input.type = type;
-    input.placeholder = key === "aiApiKey" && state.aiSessionApiKey ? "已配置；输入新 Key 可替换" : placeholder;
+    input.placeholder = placeholder;
     input.autocomplete = type === "password" ? "off" : "on";
-    input.value = key === "aiApiKey" ? "" : String(state.settings[key] || "");
+    input.value = key === "aiApiKey" ? state.aiSessionApiKey : String(state.settings[key] || "");
     input.setAttribute(`data-${EXT_ID}-ai-field`, key);
     input.addEventListener("input", () => {
       if (key !== "aiApiKey") state.settings[key] = input.value.trim();
@@ -2533,17 +2598,57 @@
     input.addEventListener("change", async () => {
       if (key === "aiApiKey") {
         const nextKey = input.value.trim();
-        if (!nextKey) return;
+        input.value = nextKey;
         state.aiSessionApiKey = nextKey;
+        state.settings.aiApiKey = state.settings.aiRememberApiKey ? nextKey : "";
         if (state.settings.aiRememberApiKey) await storage.set({ aiApiKey: nextKey });
-        input.value = "";
-        input.placeholder = "已配置；输入新 Key 可替换";
         return;
       }
       state.settings[key] = input.value.trim();
       await storage.set({ [key]: state.settings[key] });
     });
-    wrap.append(label, input);
+    if (key === "aiApiKey") {
+      const control = document.createElement("div");
+      control.className = `${EXT_ID}-ai-key-control`;
+      const toggle = document.createElement("button");
+      toggle.id = `${EXT_ID}-ai-key-toggle`;
+      toggle.type = "button";
+      toggle.className = `${EXT_ID}-ai-key-toggle`;
+      toggle.textContent = "👁";
+      toggle.title = "显示 API Key";
+      toggle.setAttribute("aria-label", "显示 API Key");
+      toggle.setAttribute("aria-pressed", "false");
+      toggle.addEventListener("click", () => {
+        const visible = input.type === "text";
+        input.type = visible ? "password" : "text";
+        toggle.title = visible ? "显示 API Key" : "隐藏 API Key";
+        toggle.setAttribute("aria-label", toggle.title);
+        toggle.setAttribute("aria-pressed", String(!visible));
+      });
+      control.append(input, toggle);
+      wrap.append(label, control);
+    } else {
+      wrap.append(label, input);
+    }
+    return wrap;
+  }
+
+  function aiConfigSelect(labelText, key, options) {
+    const wrap = document.createElement("label");
+    wrap.className = `${EXT_ID}-ai-field`;
+    const label = document.createElement("span");
+    label.textContent = labelText;
+    const select = document.createElement("select");
+    select.setAttribute(`data-${EXT_ID}-ai-field`, key);
+    options.forEach(([value, text]) => select.add(new Option(text, value)));
+    select.value = key === "aiRetryCount" ? String(aiRetryCount()) : String(state.settings[key] || "auto");
+    select.addEventListener("change", async () => {
+      const value = key === "aiRetryCount" ? Number(select.value) : select.value;
+      state.settings[key] = value;
+      await storage.set({ [key]: value });
+      updateQuizDisplay(true);
+    });
+    wrap.append(label, select);
     return wrap;
   }
 
@@ -2563,6 +2668,19 @@
         placeholder: "https://example.com/v1/chat/completions"
       }),
       aiConfigField("模型名称", "aiModel", { placeholder: "例如模型 ID" }),
+      aiConfigSelect("思考强度", "aiReasoningEffort", [
+        ["auto", "跟随模型"],
+        ["none", "不思考"],
+        ["low", "低"],
+        ["medium", "中"],
+        ["high", "高"]
+      ]),
+      aiConfigSelect("失败重试", "aiRetryCount", [
+        ["0", "不重试"],
+        ["1", "1 次"],
+        ["2", "2 次"],
+        ["3", "3 次"]
+      ]),
       aiConfigField("API Key（本地接口可留空）", "aiApiKey", {
         type: "password",
         placeholder: "输入 API Key；本地接口可留空"
@@ -2593,7 +2711,14 @@
       const input = document.querySelector(`[data-${EXT_ID}-ai-field='aiApiKey']`);
       if (input) {
         input.value = "";
+        input.type = "password";
         input.placeholder = "本地接口可留空";
+      }
+      const toggle = document.querySelector(`#${EXT_ID}-ai-key-toggle`);
+      if (toggle) {
+        toggle.title = "显示 API Key";
+        toggle.setAttribute("aria-label", toggle.title);
+        toggle.setAttribute("aria-pressed", "false");
       }
       updateAiConfigStatus("已清除当前会话和本地存储中的 API Key", false);
     });
@@ -2603,7 +2728,7 @@
     status.className = `${EXT_ID}-ai-config-status`;
     const note = document.createElement("div");
     note.className = `${EXT_ID}-ai-config-note`;
-    note.textContent = "只会发送课程标题、可见题干和选项；全自动模式会填写、提交，并在通过后继续学习。";
+    note.textContent = "思考强度通过 reasoning_effort 发送；鉴权和参数错误会直接显示，超时、限流与服务异常按设置重试。";
     config.append(configActions, status, note);
     return config;
   }
@@ -2738,7 +2863,7 @@
     all.disabled = state.quizBusy || !valid.length;
     all.textContent = `应用全部有效答案 (${valid.length})`;
     note.textContent = automatic
-      ? "全自动模式会填写全部有效答案并提交；分析或页面操作失败时自动停止，最多请求模型 2 次。"
+      ? `全自动模式会填写全部有效答案并提交；模型分析失败时最多重试 ${aiRetryCount()} 次。`
       : "手动模式会保留答案预览和回填按钮，提交继续使用平台原生按钮。";
 
     const signature = JSON.stringify({
@@ -3091,6 +3216,8 @@
           quiz: {
             enabled: Boolean(state.settings.aiQuizEnabled),
             autoSubmit: Boolean(state.settings.aiQuizAutoSubmit),
+            reasoningEffort: state.settings.aiReasoningEffort,
+            retryCount: aiRetryCount(),
             detected: pageLooksQuestion(),
             questions: state.quizQuestions.length,
             answers: state.quizAnswers.map((answer) => ({

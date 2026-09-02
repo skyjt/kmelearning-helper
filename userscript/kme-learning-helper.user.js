@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         KME 学习助手
 // @namespace    https://github.com/skyjt/kmelearning-helper
-// @version      2.12.3
+// @version      2.13.0
 // @description  自动学习 KME 课程，并通过用户配置的大模型完成可见测验和后续课程。
 // @author       skyjt
 // @license      MIT
@@ -26,7 +26,7 @@
   "use strict";
 
   const USERSCRIPT_ICON_URL = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMjggMTI4Ij4KICA8ZGVmcz4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0iYmciIHgxPSIxOCIgeDI9IjExMCIgeTE9IjE1IiB5Mj0iMTE2IiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+CiAgICAgIDxzdG9wIHN0b3AtY29sb3I9IiMyRDc2RkYiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIuNzIiIHN0b3AtY29sb3I9IiMyMUQzQjUiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjRkZCMjVFIi8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogICAgPGZpbHRlciBpZD0ic2hhZG93IiB4PSItMjAlIiB5PSItMjAlIiB3aWR0aD0iMTQwJSIgaGVpZ2h0PSIxNTAlIj4KICAgICAgPGZlRHJvcFNoYWRvdyBkeD0iMCIgZHk9IjgiIHN0ZERldmlhdGlvbj0iNiIgZmxvb2QtY29sb3I9IiMwODEyMjgiIGZsb29kLW9wYWNpdHk9Ii4yNSIvPgogICAgPC9maWx0ZXI+CiAgPC9kZWZzPgogIDxyZWN0IHg9IjEwIiB5PSIxMCIgd2lkdGg9IjEwOCIgaGVpZ2h0PSIxMDgiIHJ4PSIyNiIgZmlsbD0idXJsKCNiZykiIGZpbHRlcj0idXJsKCNzaGFkb3cpIi8+CiAgPGNpcmNsZSBjeD0iMjciIGN5PSIyNSIgcj0iMzAiIGZpbGw9IiNmZmYiIG9wYWNpdHk9Ii4xNSIvPgogIDxnIG9wYWNpdHk9Ii45NSI+CiAgICA8cmVjdCB4PSIzMCIgeT0iMzgiIHdpZHRoPSIzMSIgaGVpZ2h0PSI1NiIgcng9IjYiIGZpbGw9IiNmZmYiIHRyYW5zZm9ybT0icm90YXRlKC03IDQ1LjUgNjYpIi8+CiAgICA8cmVjdCB4PSI2NyIgeT0iMzgiIHdpZHRoPSIzMSIgaGVpZ2h0PSI1NiIgcng9IjYiIGZpbGw9IiNFQUY0RkYiIHRyYW5zZm9ybT0icm90YXRlKDcgODIuNSA2NikiLz4KICAgIDxyZWN0IHg9IjYyIiB5PSIzOCIgd2lkdGg9IjQiIGhlaWdodD0iNTgiIHJ4PSIyIiBmaWxsPSIjMjg3NUI5IiBvcGFjaXR5PSIuMzUiLz4KICAgIDxwYXRoIGQ9Ik03NCA2MnYxOWwxNy05LjV6IiBmaWxsPSIjMUU3MkYwIi8+CiAgICA8cGF0aCBkPSJNMzMgNTZsMTgtNE0zNSA3MWwxNy0zTTczIDU1bDE2IDQiIHN0cm9rZT0iIzM3N0VCRSIgc3Ryb2tlLXdpZHRoPSIzLjQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgb3BhY2l0eT0iLjI1Ii8+CiAgPC9nPgogIDxjaXJjbGUgY3g9Ijg4IiBjeT0iNDAiIHI9IjE4IiBmaWxsPSIjRkY2QTczIi8+CiAgPHBhdGggZD0iTTgwIDQwbDYgNiAxMi0xNSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8L3N2Zz4K";
-  const USERSCRIPT_STYLES = "#kme-learning-navigator {\n  position: fixed;\n  right: 16px;\n  bottom: 16px;\n  z-index: 2147483647;\n  color: var(--kme-ink);\n  font: 13px/1.45 -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;\n  --kme-accent: #246bfe;\n  --kme-accent-2: #21bfae;\n  --kme-danger: #e5484d;\n  --kme-ink: #1b2150;\n  --kme-muted: rgba(27, 31, 70, 0.56);\n  --kme-line: rgba(27, 31, 70, 0.1);\n  --kme-surface: rgba(255, 255, 255, 0.97);\n}\n\n#kme-learning-navigator * {\n  box-sizing: border-box;\n}\n\n/* Several containers below set display:grid/flex, which would otherwise override the\n   hidden attribute wherever the script toggles it (actions row, task list, quiz\n   results, apply-answer buttons, ...). */\n#kme-learning-navigator [hidden] {\n  display: none !important;\n}\n\n.kme-learning-navigator-panel {\n  display: none;\n  width: min(360px, calc(100vw - 32px));\n  padding: 14px;\n  border: 1px solid var(--kme-line);\n  border-radius: 14px;\n  background: var(--kme-surface);\n  -webkit-backdrop-filter: blur(12px) saturate(1.4);\n  backdrop-filter: blur(12px) saturate(1.4);\n  box-shadow: 0 18px 48px rgba(20, 27, 70, 0.22), 0 2px 6px rgba(20, 27, 70, 0.08);\n  perspective: 1400px;\n}\n\n/* Flip card: the front face (live panel) and back face (settings) share one card that the\n   ⚙ button rotates between. Each face hides its own backface; the visible one alone is\n   interactive so the hidden face can't intercept clicks. */\n.kme-learning-navigator-flip-inner {\n  position: relative;\n  width: 100%;\n  transform-style: preserve-3d;\n  transition: transform 0.55s cubic-bezier(0.4, 0.15, 0.2, 1);\n}\n\n#kme-learning-navigator.flipped .kme-learning-navigator-flip-inner {\n  transform: rotateY(180deg);\n}\n\n.kme-learning-navigator-face {\n  width: 100%;\n  -webkit-backface-visibility: hidden;\n  backface-visibility: hidden;\n}\n\n.kme-learning-navigator-face-front {\n  position: relative;\n  max-height: min(680px, calc(100vh - 64px));\n  padding-right: 2px;\n  overflow-y: auto;\n}\n\n.kme-learning-navigator-face-back {\n  position: absolute;\n  top: 0;\n  left: 0;\n  max-height: min(680px, calc(100vh - 64px));\n  padding-right: 2px;\n  overflow-y: auto;\n  transform: rotateY(180deg);\n  pointer-events: none;\n}\n\n#kme-learning-navigator.flipped .kme-learning-navigator-face-front {\n  pointer-events: none;\n}\n\n#kme-learning-navigator.flipped .kme-learning-navigator-face-back {\n  pointer-events: auto;\n}\n\n.kme-learning-navigator-done {\n  padding: 6px 14px;\n  border: 1px solid var(--kme-line);\n  border-radius: 8px;\n  background: rgba(36, 107, 254, 0.08);\n  color: var(--kme-accent);\n  cursor: pointer;\n  font-weight: 600;\n  font-size: 12.5px;\n  transition: background 0.15s ease, transform 0.15s ease;\n}\n\n.kme-learning-navigator-done:hover {\n  background: rgba(36, 107, 254, 0.16);\n}\n\n.kme-learning-navigator-done:active {\n  transform: scale(0.96);\n}\n\n.kme-learning-navigator-settings-note {\n  margin-top: 12px;\n  padding-top: 11px;\n  border-top: 1px solid var(--kme-line);\n  color: var(--kme-muted);\n  font-size: 12px;\n  line-height: 1.5;\n}\n\n#kme-learning-navigator.open .kme-learning-navigator-panel {\n  display: block;\n  animation: kme-pop-in 0.2s cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n@keyframes kme-pop-in {\n  from { opacity: 0; transform: translateY(10px) scale(0.97); }\n  to { opacity: 1; transform: none; }\n}\n\n.kme-learning-navigator-titlebar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  margin-bottom: 12px;\n}\n\n.kme-learning-navigator-title {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  font-size: 14px;\n  font-weight: 700;\n  letter-spacing: 0.2px;\n}\n\n.kme-learning-navigator-title::before {\n  content: \"\";\n  width: 8px;\n  height: 8px;\n  border-radius: 50%;\n  background: linear-gradient(135deg, var(--kme-accent), var(--kme-accent-2));\n}\n\n.kme-learning-navigator-controls {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n}\n\n.kme-learning-navigator-minimize,\n.kme-learning-navigator-settings {\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  width: 26px;\n  height: 26px;\n  padding: 0;\n  border: 1px solid var(--kme-line);\n  border-radius: 8px;\n  background: rgba(27, 31, 70, 0.04);\n  color: var(--kme-muted);\n  cursor: pointer;\n  font: 600 16px/1 -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif;\n  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;\n}\n\n.kme-learning-navigator-minimize:hover,\n.kme-learning-navigator-settings:hover {\n  background: rgba(36, 107, 254, 0.1);\n  color: var(--kme-accent);\n}\n\n.kme-learning-navigator-minimize:active,\n.kme-learning-navigator-settings:active {\n  transform: scale(0.92);\n}\n\n.kme-learning-navigator-settings svg {\n  display: block;\n  pointer-events: none;\n}\n\n.kme-learning-navigator-actions {\n  display: grid;\n  grid-template-columns: 1fr auto;\n  gap: 8px;\n  margin-bottom: 12px;\n}\n\n.kme-learning-navigator-tasks {\n  margin-bottom: 12px;\n  padding: 11px;\n  border: 1px solid rgba(36, 107, 254, 0.14);\n  border-radius: 12px;\n  background: rgba(36, 107, 254, 0.035);\n}\n\n.kme-learning-navigator-task-header {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  margin-bottom: 8px;\n  color: var(--kme-ink);\n  font-size: 12px;\n  font-weight: 700;\n}\n\n.kme-learning-navigator-task-refresh {\n  flex: none;\n  padding: 2px 9px;\n  border: 1px solid var(--kme-line);\n  border-radius: 999px;\n  background: transparent;\n  color: var(--kme-muted);\n  cursor: pointer;\n  font: inherit;\n  font-size: 11px;\n  line-height: 1.4;\n  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;\n}\n\n.kme-learning-navigator-task-refresh:hover {\n  border-color: rgba(36, 107, 254, 0.4);\n  background: rgba(36, 107, 254, 0.08);\n  color: var(--kme-accent);\n}\n\n.kme-learning-navigator-task-refresh:active {\n  transform: scale(0.94);\n}\n\n.kme-learning-navigator-task-list {\n  display: flex;\n  max-height: 210px;\n  flex-direction: column;\n  gap: 7px;\n  overflow-y: auto;\n  overscroll-behavior: contain;\n}\n\n.kme-learning-navigator-task-item {\n  display: flex;\n  width: 100%;\n  min-width: 0;\n  align-items: center;\n  justify-content: space-between;\n  gap: 9px;\n  padding: 9px 10px;\n  border: 1px solid var(--kme-line);\n  border-radius: 9px;\n  background: #fff;\n  color: var(--kme-ink);\n  cursor: pointer;\n  font: inherit;\n  text-align: left;\n  transition: border-color 0.16s ease, background 0.16s ease, transform 0.12s ease;\n}\n\n.kme-learning-navigator-task-item:hover {\n  border-color: rgba(36, 107, 254, 0.36);\n  background: rgba(36, 107, 254, 0.06);\n}\n\n.kme-learning-navigator-task-item:active {\n  transform: scale(0.985);\n}\n\n.kme-learning-navigator-task-item:disabled {\n  opacity: 0.52;\n  cursor: not-allowed;\n}\n\n.kme-learning-navigator-task-title {\n  min-width: 0;\n  overflow: hidden;\n  color: var(--kme-ink);\n  font-weight: 600;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.kme-learning-navigator-task-type {\n  flex: none;\n  padding: 2px 6px;\n  border-radius: 999px;\n  background: rgba(36, 107, 254, 0.09);\n  color: var(--kme-accent);\n  font-size: 11px;\n  line-height: 1.4;\n}\n\n.kme-learning-navigator-task-empty {\n  padding: 10px 4px 4px;\n  color: var(--kme-muted);\n  font-size: 12px;\n  text-align: center;\n}\n\n.kme-learning-navigator-task-confirmation {\n  padding: 3px 1px 0;\n}\n\n.kme-learning-navigator-task-confirmation-title {\n  color: var(--kme-ink);\n  font-weight: 700;\n  line-height: 1.5;\n  word-break: break-word;\n}\n\n.kme-learning-navigator-task-confirmation p {\n  margin: 7px 0 10px;\n  color: var(--kme-muted);\n  font-size: 12px;\n  line-height: 1.5;\n}\n\n.kme-learning-navigator-task-confirmation-actions {\n  display: grid;\n  grid-template-columns: 1fr 1.35fr;\n  gap: 8px;\n}\n\n.kme-learning-navigator-task-cancel,\n.kme-learning-navigator-task-confirm {\n  height: 32px;\n  border-radius: 8px;\n  cursor: pointer;\n  font: inherit;\n  font-weight: 600;\n}\n\n.kme-learning-navigator-task-cancel {\n  border: 1px solid var(--kme-line);\n  background: #fff;\n  color: var(--kme-muted);\n}\n\n.kme-learning-navigator-task-confirm {\n  border: 0;\n  background: linear-gradient(135deg, var(--kme-accent), #3d82ff);\n  color: #fff;\n  box-shadow: 0 5px 12px rgba(36, 107, 254, 0.24);\n}\n\n.kme-learning-navigator-task-cancel:hover,\n.kme-learning-navigator-task-confirm:hover {\n  filter: brightness(1.04);\n}\n\n.kme-learning-navigator-quiz {\n  margin-bottom: 12px;\n  padding: 11px;\n  border: 1px solid rgba(36, 107, 254, 0.18);\n  border-radius: 12px;\n  background: linear-gradient(145deg, rgba(36, 107, 254, 0.07), rgba(33, 191, 174, 0.06));\n}\n\n.kme-learning-navigator-quiz-header {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  margin-bottom: 7px;\n  font-weight: 700;\n}\n\n.kme-learning-navigator-quiz-header span:last-child {\n  padding: 2px 7px;\n  border-radius: 999px;\n  background: rgba(36, 107, 254, 0.1);\n  color: var(--kme-accent);\n  font-size: 11px;\n  font-weight: 600;\n}\n\n.kme-learning-navigator-quiz-message,\n.kme-learning-navigator-quiz-error,\n.kme-learning-navigator-quiz-note {\n  color: var(--kme-muted);\n  font-size: 12px;\n  line-height: 1.5;\n}\n\n.kme-learning-navigator-quiz-error {\n  margin-top: 6px;\n  color: var(--kme-danger);\n}\n\n.kme-learning-navigator-quiz-analyze,\n.kme-learning-navigator-quiz-apply-trusted,\n.kme-learning-navigator-quiz-apply-all,\n.kme-learning-navigator-ai-test,\n.kme-learning-navigator-ai-clear-key {\n  min-height: 34px;\n  border-radius: 9px;\n  cursor: pointer;\n  font: inherit;\n  font-weight: 600;\n}\n\n.kme-learning-navigator-quiz-analyze {\n  width: 100%;\n  margin-top: 9px;\n  border: 0;\n  background: linear-gradient(135deg, var(--kme-accent), #3d82ff);\n  color: #fff;\n}\n\n.kme-learning-navigator-quiz-analyze:disabled,\n.kme-learning-navigator-quiz-apply-trusted:disabled,\n.kme-learning-navigator-quiz-apply-all:disabled,\n.kme-learning-navigator-ai-test:disabled {\n  opacity: 0.5;\n  cursor: wait;\n}\n\n.kme-learning-navigator-quiz-results {\n  display: flex;\n  max-height: 210px;\n  flex-direction: column;\n  gap: 7px;\n  margin-top: 9px;\n  overflow-y: auto;\n}\n\n.kme-learning-navigator-quiz-result {\n  padding: 8px 9px;\n  border: 1px solid rgba(33, 191, 174, 0.2);\n  border-radius: 9px;\n  background: rgba(255, 255, 255, 0.78);\n}\n\n.kme-learning-navigator-quiz-result.is-low {\n  border-color: rgba(229, 151, 0, 0.32);\n  background: rgba(255, 184, 0, 0.07);\n}\n\n.kme-learning-navigator-quiz-result.is-error {\n  border-color: rgba(229, 72, 77, 0.28);\n  background: rgba(229, 72, 77, 0.05);\n}\n\n.kme-learning-navigator-quiz-result-heading {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  color: var(--kme-ink);\n  font-weight: 700;\n  font-size: 12px;\n}\n\n.kme-learning-navigator-quiz-result-heading span:last-child {\n  color: var(--kme-muted);\n  font-weight: 600;\n}\n\n.kme-learning-navigator-quiz-result-option {\n  margin-top: 4px;\n  color: var(--kme-ink);\n  font-size: 11.5px;\n  line-height: 1.45;\n}\n\n.kme-learning-navigator-quiz-result-reason {\n  margin-top: 4px;\n  color: var(--kme-muted);\n  font-size: 11px;\n  line-height: 1.45;\n}\n\n.kme-learning-navigator-quiz-apply-actions {\n  display: grid;\n  grid-template-columns: 1fr 1fr;\n  gap: 7px;\n  margin-top: 9px;\n}\n\n.kme-learning-navigator-quiz-apply-trusted {\n  border: 0;\n  background: linear-gradient(135deg, var(--kme-accent-2), #37cdbb);\n  color: #fff;\n}\n\n.kme-learning-navigator-quiz-apply-all {\n  border: 1px solid var(--kme-line);\n  background: #fff;\n  color: var(--kme-ink);\n}\n\n.kme-learning-navigator-quiz-note {\n  margin-top: 8px;\n}\n\n.kme-learning-navigator-primary,\n.kme-learning-navigator-secondary {\n  height: 38px;\n  border-radius: 10px;\n  cursor: pointer;\n  font: inherit;\n  font-weight: 600;\n  transition: transform 0.12s ease, box-shadow 0.18s ease, background 0.18s ease,\n    border-color 0.18s ease, filter 0.18s ease;\n}\n\n.kme-learning-navigator-primary {\n  border: none;\n  color: #fff;\n  background: linear-gradient(135deg, var(--kme-accent), #3d82ff);\n  box-shadow: 0 6px 16px rgba(36, 107, 254, 0.34);\n}\n\n.kme-learning-navigator-primary:hover {\n  filter: brightness(1.05);\n  box-shadow: 0 8px 20px rgba(36, 107, 254, 0.42);\n}\n\n.kme-learning-navigator-primary:active {\n  transform: translateY(1px);\n}\n\n.kme-learning-navigator-primary.is-running {\n  background: linear-gradient(135deg, var(--kme-danger), #f0676b);\n  box-shadow: 0 6px 16px rgba(229, 72, 77, 0.34);\n}\n\n.kme-learning-navigator-secondary {\n  min-width: 80px;\n  padding: 0 14px;\n  border: 1px solid var(--kme-line);\n  background: #fff;\n  color: var(--kme-ink);\n}\n\n.kme-learning-navigator-secondary:hover {\n  border-color: rgba(36, 107, 254, 0.4);\n  color: var(--kme-accent);\n  background: rgba(36, 107, 254, 0.05);\n}\n\n.kme-learning-navigator-secondary:active {\n  transform: translateY(1px);\n}\n\n.kme-learning-navigator-progress {\n  margin-bottom: 12px;\n  padding: 11px 12px;\n  border: 1px solid rgba(36, 107, 254, 0.14);\n  border-radius: 12px;\n  background: linear-gradient(135deg, rgba(36, 107, 254, 0.08), rgba(33, 191, 174, 0.1));\n}\n\n.kme-learning-navigator-progress-label {\n  margin-bottom: 8px;\n  color: var(--kme-ink);\n  font-weight: 600;\n  font-size: 12.5px;\n}\n\n.kme-learning-navigator-progress-track {\n  height: 8px;\n  overflow: hidden;\n  border-radius: 999px;\n  background: rgba(27, 31, 70, 0.12);\n}\n\n.kme-learning-navigator-progress-fill {\n  width: 0%;\n  height: 100%;\n  border-radius: inherit;\n  background: linear-gradient(90deg, var(--kme-accent), var(--kme-accent-2));\n  transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.kme-learning-navigator-row {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  min-height: 32px;\n  gap: 12px;\n}\n\n.kme-learning-navigator-ai-config {\n  margin-top: 11px;\n  padding: 10px;\n  border: 1px solid rgba(36, 107, 254, 0.16);\n  border-radius: 11px;\n  background: rgba(36, 107, 254, 0.035);\n}\n\n.kme-learning-navigator-ai-config-title {\n  margin-bottom: 8px;\n  color: var(--kme-ink);\n  font-weight: 700;\n  font-size: 12px;\n}\n\n.kme-learning-navigator-ai-field {\n  display: block;\n  margin-top: 8px;\n}\n\n.kme-learning-navigator-ai-field > span {\n  display: block;\n  margin-bottom: 4px;\n  color: var(--kme-muted);\n  font-size: 11.5px;\n}\n\n.kme-learning-navigator-ai-field input {\n  width: 100%;\n  height: 34px;\n  padding: 0 9px;\n  border: 1px solid var(--kme-line);\n  border-radius: 8px;\n  outline: none;\n  background: #fff;\n  color: var(--kme-ink);\n  font: inherit;\n  font-size: 12px;\n}\n\n.kme-learning-navigator-ai-field input:focus {\n  border-color: rgba(36, 107, 254, 0.55);\n  box-shadow: 0 0 0 3px rgba(36, 107, 254, 0.09);\n}\n\n.kme-learning-navigator-ai-config .kme-learning-navigator-row {\n  margin-top: 7px;\n}\n\n.kme-learning-navigator-ai-test {\n  border: 1px solid rgba(36, 107, 254, 0.25);\n  background: rgba(36, 107, 254, 0.08);\n  color: var(--kme-accent);\n}\n\n.kme-learning-navigator-ai-config-actions {\n  display: grid;\n  grid-template-columns: 1fr auto;\n  gap: 7px;\n  margin-top: 9px;\n}\n\n.kme-learning-navigator-ai-clear-key {\n  padding: 0 10px;\n  border: 1px solid var(--kme-line);\n  background: #fff;\n  color: var(--kme-muted);\n}\n\n.kme-learning-navigator-ai-config-status,\n.kme-learning-navigator-ai-config-note {\n  margin-top: 7px;\n  color: var(--kme-muted);\n  font-size: 11px;\n  line-height: 1.45;\n  word-break: break-word;\n}\n\n.kme-learning-navigator-ai-config-status.is-error {\n  color: var(--kme-danger);\n}\n\n/* Render the native checkboxes as compact toggle switches without touching the markup. */\n.kme-learning-navigator-row input[type=\"checkbox\"] {\n  appearance: none;\n  -webkit-appearance: none;\n  position: relative;\n  flex: none;\n  width: 38px;\n  height: 22px;\n  margin: 0;\n  border-radius: 999px;\n  background: #c9cee0;\n  cursor: pointer;\n  transition: background 0.2s ease;\n}\n\n.kme-learning-navigator-row input[type=\"checkbox\"]::after {\n  content: \"\";\n  position: absolute;\n  top: 2px;\n  left: 2px;\n  width: 18px;\n  height: 18px;\n  border-radius: 50%;\n  background: #fff;\n  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);\n  transition: transform 0.2s ease;\n}\n\n.kme-learning-navigator-row input[type=\"checkbox\"]:checked {\n  background: linear-gradient(135deg, var(--kme-accent), var(--kme-accent-2));\n}\n\n.kme-learning-navigator-row input[type=\"checkbox\"]:checked::after {\n  transform: translateX(16px);\n}\n\n.kme-learning-navigator-row input[type=\"checkbox\"]:focus-visible {\n  outline: 2px solid rgba(36, 107, 254, 0.5);\n  outline-offset: 2px;\n}\n\n.kme-learning-navigator-summary {\n  min-height: 18px;\n  margin-top: 12px;\n  padding-top: 11px;\n  border-top: 1px solid var(--kme-line);\n  color: var(--kme-muted);\n  font-size: 12px;\n  word-break: break-word;\n}\n\n.kme-learning-navigator-status {\n  display: flex;\n  align-items: flex-start;\n  gap: 7px;\n  margin-top: 9px;\n  color: var(--kme-ink);\n  opacity: 0.85;\n  font-size: 12px;\n  word-break: break-word;\n}\n\n.kme-learning-navigator-status::before {\n  content: \"\";\n  flex: none;\n  margin-top: 4px;\n  width: 7px;\n  height: 7px;\n  border-radius: 50%;\n  background: linear-gradient(135deg, var(--kme-accent), var(--kme-accent-2));\n}\n\n.kme-learning-navigator-status-text {\n  display: -webkit-box;\n  min-height: 18px;\n  overflow: hidden;\n  -webkit-box-orient: vertical;\n  -webkit-line-clamp: 2;\n}\n\n.kme-learning-navigator-logo-toggle {\n  position: relative;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  width: 52px;\n  height: 52px;\n  margin-left: auto;\n  padding: 0;\n  border: 1px solid var(--kme-line);\n  border-radius: 50%;\n  background: linear-gradient(135deg, #ffffff, #eaf3ff);\n  cursor: pointer;\n  box-shadow: 0 12px 28px rgba(20, 27, 70, 0.22);\n  transition: transform 0.18s ease, box-shadow 0.18s ease;\n}\n\n.kme-learning-navigator-logo-toggle:hover {\n  transform: translateY(-2px) scale(1.04);\n  box-shadow: 0 16px 34px rgba(20, 27, 70, 0.26);\n}\n\n.kme-learning-navigator-logo-toggle:active {\n  transform: translateY(0) scale(0.98);\n}\n\n.kme-learning-navigator-logo-toggle img {\n  width: 32px;\n  height: 32px;\n  display: block;\n  pointer-events: none;\n}\n\n#kme-learning-navigator.open .kme-learning-navigator-logo-toggle {\n  display: none;\n}\n\n.kme-learning-navigator-logo-dot {\n  position: absolute;\n  right: 6px;\n  bottom: 6px;\n  width: 12px;\n  height: 12px;\n  border: 2px solid #fff;\n  border-radius: 50%;\n  background: #9aa0b8;\n}\n\n.kme-learning-navigator-logo-dot.is-running {\n  background: var(--kme-accent-2);\n  animation: kme-pulse 1.8s ease-out infinite;\n}\n\n@keyframes kme-pulse {\n  0% { box-shadow: 0 0 0 0 rgba(33, 191, 174, 0.55); }\n  70% { box-shadow: 0 0 0 7px rgba(33, 191, 174, 0); }\n  100% { box-shadow: 0 0 0 0 rgba(33, 191, 174, 0); }\n}\n\n@media (prefers-color-scheme: dark) {\n  #kme-learning-navigator {\n    --kme-ink: #e7ebff;\n    --kme-muted: rgba(231, 235, 255, 0.6);\n    --kme-line: rgba(231, 235, 255, 0.14);\n    --kme-surface: rgba(28, 32, 54, 0.95);\n  }\n\n  .kme-learning-navigator-secondary {\n    background: rgba(255, 255, 255, 0.06);\n    color: var(--kme-ink);\n  }\n\n  .kme-learning-navigator-task-item,\n  .kme-learning-navigator-task-cancel,\n  .kme-learning-navigator-quiz-result,\n  .kme-learning-navigator-quiz-apply-all,\n  .kme-learning-navigator-ai-clear-key,\n  .kme-learning-navigator-ai-field input {\n    background: rgba(255, 255, 255, 0.06);\n    color: var(--kme-ink);\n  }\n\n  .kme-learning-navigator-task-item:hover {\n    background: rgba(36, 107, 254, 0.18);\n  }\n\n  .kme-learning-navigator-secondary:hover {\n    background: rgba(36, 107, 254, 0.18);\n  }\n\n  .kme-learning-navigator-minimize,\n  .kme-learning-navigator-settings {\n    background: rgba(255, 255, 255, 0.06);\n  }\n\n  .kme-learning-navigator-row input[type=\"checkbox\"] {\n    background: rgba(255, 255, 255, 0.18);\n  }\n\n  .kme-learning-navigator-progress-track {\n    background: rgba(255, 255, 255, 0.12);\n  }\n\n  .kme-learning-navigator-logo-toggle {\n    background: linear-gradient(135deg, #2a3050, #1d2238);\n  }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  #kme-learning-navigator *,\n  #kme-learning-navigator.open .kme-learning-navigator-panel {\n    animation: none !important;\n    transition: none !important;\n  }\n}\n";
+  const USERSCRIPT_STYLES = "#kme-learning-navigator {\n  position: fixed;\n  right: 16px;\n  bottom: 16px;\n  z-index: 2147483647;\n  color: var(--kme-ink);\n  font: 13px/1.45 -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;\n  --kme-accent: #246bfe;\n  --kme-accent-2: #21bfae;\n  --kme-danger: #e5484d;\n  --kme-ink: #1b2150;\n  --kme-muted: rgba(27, 31, 70, 0.56);\n  --kme-line: rgba(27, 31, 70, 0.1);\n  --kme-surface: rgba(255, 255, 255, 0.97);\n}\n\n#kme-learning-navigator * {\n  box-sizing: border-box;\n}\n\n/* Several containers below set display:grid/flex, which would otherwise override the\n   hidden attribute wherever the script toggles it (actions row, task list, quiz\n   results, apply-answer buttons, ...). */\n#kme-learning-navigator [hidden] {\n  display: none !important;\n}\n\n.kme-learning-navigator-panel {\n  display: none;\n  width: min(360px, calc(100vw - 32px));\n  padding: 14px;\n  border: 1px solid var(--kme-line);\n  border-radius: 14px;\n  background: var(--kme-surface);\n  -webkit-backdrop-filter: blur(12px) saturate(1.4);\n  backdrop-filter: blur(12px) saturate(1.4);\n  box-shadow: 0 18px 48px rgba(20, 27, 70, 0.22), 0 2px 6px rgba(20, 27, 70, 0.08);\n  perspective: 1400px;\n}\n\n/* Flip card: the front face (live panel) and back face (settings) share one card that the\n   ⚙ button rotates between. Each face hides its own backface; the visible one alone is\n   interactive so the hidden face can't intercept clicks. */\n.kme-learning-navigator-flip-inner {\n  position: relative;\n  width: 100%;\n  transform-style: preserve-3d;\n  transition: transform 0.55s cubic-bezier(0.4, 0.15, 0.2, 1);\n}\n\n#kme-learning-navigator.flipped .kme-learning-navigator-flip-inner {\n  transform: rotateY(180deg);\n}\n\n.kme-learning-navigator-face {\n  width: 100%;\n  -webkit-backface-visibility: hidden;\n  backface-visibility: hidden;\n}\n\n.kme-learning-navigator-face-front {\n  position: relative;\n  max-height: min(680px, calc(100vh - 64px));\n  padding-right: 2px;\n  overflow-y: auto;\n}\n\n.kme-learning-navigator-face-back {\n  position: absolute;\n  top: 0;\n  left: 0;\n  max-height: min(680px, calc(100vh - 64px));\n  padding-right: 2px;\n  overflow-y: auto;\n  transform: rotateY(180deg);\n  pointer-events: none;\n}\n\n#kme-learning-navigator.flipped .kme-learning-navigator-face-front {\n  pointer-events: none;\n}\n\n#kme-learning-navigator.flipped .kme-learning-navigator-face-back {\n  pointer-events: auto;\n}\n\n.kme-learning-navigator-done {\n  padding: 6px 14px;\n  border: 1px solid var(--kme-line);\n  border-radius: 8px;\n  background: rgba(36, 107, 254, 0.08);\n  color: var(--kme-accent);\n  cursor: pointer;\n  font-weight: 600;\n  font-size: 12.5px;\n  transition: background 0.15s ease, transform 0.15s ease;\n}\n\n.kme-learning-navigator-done:hover {\n  background: rgba(36, 107, 254, 0.16);\n}\n\n.kme-learning-navigator-done:active {\n  transform: scale(0.96);\n}\n\n.kme-learning-navigator-settings-note {\n  margin-top: 12px;\n  padding-top: 11px;\n  border-top: 1px solid var(--kme-line);\n  color: var(--kme-muted);\n  font-size: 12px;\n  line-height: 1.5;\n}\n\n#kme-learning-navigator.open .kme-learning-navigator-panel {\n  display: block;\n  animation: kme-pop-in 0.2s cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n@keyframes kme-pop-in {\n  from { opacity: 0; transform: translateY(10px) scale(0.97); }\n  to { opacity: 1; transform: none; }\n}\n\n.kme-learning-navigator-titlebar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  margin-bottom: 12px;\n}\n\n.kme-learning-navigator-title {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  font-size: 14px;\n  font-weight: 700;\n  letter-spacing: 0.2px;\n}\n\n.kme-learning-navigator-title::before {\n  content: \"\";\n  width: 8px;\n  height: 8px;\n  border-radius: 50%;\n  background: linear-gradient(135deg, var(--kme-accent), var(--kme-accent-2));\n}\n\n.kme-learning-navigator-controls {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n}\n\n.kme-learning-navigator-minimize,\n.kme-learning-navigator-settings {\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  width: 26px;\n  height: 26px;\n  padding: 0;\n  border: 1px solid var(--kme-line);\n  border-radius: 8px;\n  background: rgba(27, 31, 70, 0.04);\n  color: var(--kme-muted);\n  cursor: pointer;\n  font: 600 16px/1 -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif;\n  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;\n}\n\n.kme-learning-navigator-minimize:hover,\n.kme-learning-navigator-settings:hover {\n  background: rgba(36, 107, 254, 0.1);\n  color: var(--kme-accent);\n}\n\n.kme-learning-navigator-minimize:active,\n.kme-learning-navigator-settings:active {\n  transform: scale(0.92);\n}\n\n.kme-learning-navigator-settings svg {\n  display: block;\n  pointer-events: none;\n}\n\n.kme-learning-navigator-actions {\n  display: grid;\n  grid-template-columns: 1fr auto;\n  gap: 8px;\n  margin-bottom: 12px;\n}\n\n.kme-learning-navigator-tasks {\n  margin-bottom: 12px;\n  padding: 11px;\n  border: 1px solid rgba(36, 107, 254, 0.14);\n  border-radius: 12px;\n  background: rgba(36, 107, 254, 0.035);\n}\n\n.kme-learning-navigator-task-header {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  margin-bottom: 8px;\n  color: var(--kme-ink);\n  font-size: 12px;\n  font-weight: 700;\n}\n\n.kme-learning-navigator-task-refresh {\n  flex: none;\n  padding: 2px 9px;\n  border: 1px solid var(--kme-line);\n  border-radius: 999px;\n  background: transparent;\n  color: var(--kme-muted);\n  cursor: pointer;\n  font: inherit;\n  font-size: 11px;\n  line-height: 1.4;\n  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;\n}\n\n.kme-learning-navigator-task-refresh:hover {\n  border-color: rgba(36, 107, 254, 0.4);\n  background: rgba(36, 107, 254, 0.08);\n  color: var(--kme-accent);\n}\n\n.kme-learning-navigator-task-refresh:active {\n  transform: scale(0.94);\n}\n\n.kme-learning-navigator-task-list {\n  display: flex;\n  max-height: 210px;\n  flex-direction: column;\n  gap: 7px;\n  overflow-y: auto;\n  overscroll-behavior: contain;\n}\n\n.kme-learning-navigator-task-item {\n  display: flex;\n  width: 100%;\n  min-width: 0;\n  align-items: center;\n  justify-content: space-between;\n  gap: 9px;\n  padding: 9px 10px;\n  border: 1px solid var(--kme-line);\n  border-radius: 9px;\n  background: #fff;\n  color: var(--kme-ink);\n  cursor: pointer;\n  font: inherit;\n  text-align: left;\n  transition: border-color 0.16s ease, background 0.16s ease, transform 0.12s ease;\n}\n\n.kme-learning-navigator-task-item:hover {\n  border-color: rgba(36, 107, 254, 0.36);\n  background: rgba(36, 107, 254, 0.06);\n}\n\n.kme-learning-navigator-task-item:active {\n  transform: scale(0.985);\n}\n\n.kme-learning-navigator-task-item:disabled {\n  opacity: 0.52;\n  cursor: not-allowed;\n}\n\n.kme-learning-navigator-task-title {\n  min-width: 0;\n  overflow: hidden;\n  color: var(--kme-ink);\n  font-weight: 600;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.kme-learning-navigator-task-type {\n  flex: none;\n  padding: 2px 6px;\n  border-radius: 999px;\n  background: rgba(36, 107, 254, 0.09);\n  color: var(--kme-accent);\n  font-size: 11px;\n  line-height: 1.4;\n}\n\n.kme-learning-navigator-task-empty {\n  padding: 10px 4px 4px;\n  color: var(--kme-muted);\n  font-size: 12px;\n  text-align: center;\n}\n\n.kme-learning-navigator-task-confirmation {\n  padding: 3px 1px 0;\n}\n\n.kme-learning-navigator-task-confirmation-title {\n  color: var(--kme-ink);\n  font-weight: 700;\n  line-height: 1.5;\n  word-break: break-word;\n}\n\n.kme-learning-navigator-task-confirmation p {\n  margin: 7px 0 10px;\n  color: var(--kme-muted);\n  font-size: 12px;\n  line-height: 1.5;\n}\n\n.kme-learning-navigator-task-confirmation-actions {\n  display: grid;\n  grid-template-columns: 1fr 1.35fr;\n  gap: 8px;\n}\n\n.kme-learning-navigator-task-cancel,\n.kme-learning-navigator-task-confirm {\n  height: 32px;\n  border-radius: 8px;\n  cursor: pointer;\n  font: inherit;\n  font-weight: 600;\n}\n\n.kme-learning-navigator-task-cancel {\n  border: 1px solid var(--kme-line);\n  background: #fff;\n  color: var(--kme-muted);\n}\n\n.kme-learning-navigator-task-confirm {\n  border: 0;\n  background: linear-gradient(135deg, var(--kme-accent), #3d82ff);\n  color: #fff;\n  box-shadow: 0 5px 12px rgba(36, 107, 254, 0.24);\n}\n\n.kme-learning-navigator-task-cancel:hover,\n.kme-learning-navigator-task-confirm:hover {\n  filter: brightness(1.04);\n}\n\n.kme-learning-navigator-quiz {\n  margin-bottom: 12px;\n  padding: 11px;\n  border: 1px solid rgba(36, 107, 254, 0.18);\n  border-radius: 12px;\n  background: linear-gradient(145deg, rgba(36, 107, 254, 0.07), rgba(33, 191, 174, 0.06));\n}\n\n.kme-learning-navigator-quiz-header {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  margin-bottom: 7px;\n  font-weight: 700;\n}\n\n.kme-learning-navigator-quiz-header span:last-child {\n  padding: 2px 7px;\n  border-radius: 999px;\n  background: rgba(36, 107, 254, 0.1);\n  color: var(--kme-accent);\n  font-size: 11px;\n  font-weight: 600;\n}\n\n.kme-learning-navigator-quiz-message,\n.kme-learning-navigator-quiz-error,\n.kme-learning-navigator-quiz-note {\n  color: var(--kme-muted);\n  font-size: 12px;\n  line-height: 1.5;\n}\n\n.kme-learning-navigator-quiz-error {\n  margin-top: 6px;\n  color: var(--kme-danger);\n}\n\n.kme-learning-navigator-quiz-analyze,\n.kme-learning-navigator-quiz-apply-trusted,\n.kme-learning-navigator-quiz-apply-all,\n.kme-learning-navigator-ai-test,\n.kme-learning-navigator-ai-clear-key {\n  min-height: 34px;\n  border-radius: 9px;\n  cursor: pointer;\n  font: inherit;\n  font-weight: 600;\n}\n\n.kme-learning-navigator-quiz-analyze {\n  width: 100%;\n  margin-top: 9px;\n  border: 0;\n  background: linear-gradient(135deg, var(--kme-accent), #3d82ff);\n  color: #fff;\n}\n\n.kme-learning-navigator-quiz-analyze:disabled,\n.kme-learning-navigator-quiz-apply-trusted:disabled,\n.kme-learning-navigator-quiz-apply-all:disabled,\n.kme-learning-navigator-ai-test:disabled {\n  opacity: 0.5;\n  cursor: wait;\n}\n\n.kme-learning-navigator-quiz-results {\n  display: flex;\n  max-height: 210px;\n  flex-direction: column;\n  gap: 7px;\n  margin-top: 9px;\n  overflow-y: auto;\n}\n\n.kme-learning-navigator-quiz-result {\n  padding: 8px 9px;\n  border: 1px solid rgba(33, 191, 174, 0.2);\n  border-radius: 9px;\n  background: rgba(255, 255, 255, 0.78);\n}\n\n.kme-learning-navigator-quiz-result.is-low {\n  border-color: rgba(229, 151, 0, 0.32);\n  background: rgba(255, 184, 0, 0.07);\n}\n\n.kme-learning-navigator-quiz-result.is-error {\n  border-color: rgba(229, 72, 77, 0.28);\n  background: rgba(229, 72, 77, 0.05);\n}\n\n.kme-learning-navigator-quiz-result-heading {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  color: var(--kme-ink);\n  font-weight: 700;\n  font-size: 12px;\n}\n\n.kme-learning-navigator-quiz-result-heading span:last-child {\n  color: var(--kme-muted);\n  font-weight: 600;\n}\n\n.kme-learning-navigator-quiz-result-option {\n  margin-top: 4px;\n  color: var(--kme-ink);\n  font-size: 11.5px;\n  line-height: 1.45;\n}\n\n.kme-learning-navigator-quiz-result-reason {\n  margin-top: 4px;\n  color: var(--kme-muted);\n  font-size: 11px;\n  line-height: 1.45;\n}\n\n.kme-learning-navigator-quiz-apply-actions {\n  display: grid;\n  grid-template-columns: 1fr 1fr;\n  gap: 7px;\n  margin-top: 9px;\n}\n\n.kme-learning-navigator-quiz-apply-trusted {\n  border: 0;\n  background: linear-gradient(135deg, var(--kme-accent-2), #37cdbb);\n  color: #fff;\n}\n\n.kme-learning-navigator-quiz-apply-all {\n  border: 1px solid var(--kme-line);\n  background: #fff;\n  color: var(--kme-ink);\n}\n\n.kme-learning-navigator-quiz-note {\n  margin-top: 8px;\n}\n\n.kme-learning-navigator-primary,\n.kme-learning-navigator-secondary {\n  height: 38px;\n  border-radius: 10px;\n  cursor: pointer;\n  font: inherit;\n  font-weight: 600;\n  transition: transform 0.12s ease, box-shadow 0.18s ease, background 0.18s ease,\n    border-color 0.18s ease, filter 0.18s ease;\n}\n\n.kme-learning-navigator-primary {\n  border: none;\n  color: #fff;\n  background: linear-gradient(135deg, var(--kme-accent), #3d82ff);\n  box-shadow: 0 6px 16px rgba(36, 107, 254, 0.34);\n}\n\n.kme-learning-navigator-primary:hover {\n  filter: brightness(1.05);\n  box-shadow: 0 8px 20px rgba(36, 107, 254, 0.42);\n}\n\n.kme-learning-navigator-primary:active {\n  transform: translateY(1px);\n}\n\n.kme-learning-navigator-primary.is-running {\n  background: linear-gradient(135deg, var(--kme-danger), #f0676b);\n  box-shadow: 0 6px 16px rgba(229, 72, 77, 0.34);\n}\n\n.kme-learning-navigator-secondary {\n  min-width: 80px;\n  padding: 0 14px;\n  border: 1px solid var(--kme-line);\n  background: #fff;\n  color: var(--kme-ink);\n}\n\n.kme-learning-navigator-secondary:hover {\n  border-color: rgba(36, 107, 254, 0.4);\n  color: var(--kme-accent);\n  background: rgba(36, 107, 254, 0.05);\n}\n\n.kme-learning-navigator-secondary:active {\n  transform: translateY(1px);\n}\n\n.kme-learning-navigator-progress {\n  margin-bottom: 12px;\n  padding: 11px 12px;\n  border: 1px solid rgba(36, 107, 254, 0.14);\n  border-radius: 12px;\n  background: linear-gradient(135deg, rgba(36, 107, 254, 0.08), rgba(33, 191, 174, 0.1));\n}\n\n.kme-learning-navigator-progress-label {\n  margin-bottom: 8px;\n  color: var(--kme-ink);\n  font-weight: 600;\n  font-size: 12.5px;\n}\n\n.kme-learning-navigator-progress-track {\n  height: 8px;\n  overflow: hidden;\n  border-radius: 999px;\n  background: rgba(27, 31, 70, 0.12);\n}\n\n.kme-learning-navigator-progress-fill {\n  width: 0%;\n  height: 100%;\n  border-radius: inherit;\n  background: linear-gradient(90deg, var(--kme-accent), var(--kme-accent-2));\n  transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.kme-learning-navigator-row {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  min-height: 32px;\n  gap: 12px;\n}\n\n.kme-learning-navigator-ai-config {\n  margin-top: 11px;\n  padding: 10px;\n  border: 1px solid rgba(36, 107, 254, 0.16);\n  border-radius: 11px;\n  background: rgba(36, 107, 254, 0.035);\n}\n\n.kme-learning-navigator-ai-config-title {\n  margin-bottom: 8px;\n  color: var(--kme-ink);\n  font-weight: 700;\n  font-size: 12px;\n}\n\n.kme-learning-navigator-ai-field {\n  display: block;\n  margin-top: 8px;\n}\n\n.kme-learning-navigator-ai-field > span {\n  display: block;\n  margin-bottom: 4px;\n  color: var(--kme-muted);\n  font-size: 11.5px;\n}\n\n.kme-learning-navigator-ai-field input,\n.kme-learning-navigator-ai-field select {\n  width: 100%;\n  height: 34px;\n  padding: 0 9px;\n  border: 1px solid var(--kme-line);\n  border-radius: 8px;\n  outline: none;\n  background: #fff;\n  color: var(--kme-ink);\n  font: inherit;\n  font-size: 12px;\n}\n\n.kme-learning-navigator-ai-field input:focus,\n.kme-learning-navigator-ai-field select:focus {\n  border-color: rgba(36, 107, 254, 0.55);\n  box-shadow: 0 0 0 3px rgba(36, 107, 254, 0.09);\n}\n\n.kme-learning-navigator-ai-key-control {\n  position: relative;\n}\n\n.kme-learning-navigator-ai-key-control input {\n  padding-right: 42px;\n}\n\n.kme-learning-navigator-ai-key-toggle {\n  position: absolute;\n  top: 1px;\n  right: 1px;\n  display: flex;\n  width: 34px;\n  height: 32px;\n  align-items: center;\n  justify-content: center;\n  padding: 0;\n  border: 0;\n  border-left: 1px solid var(--kme-line);\n  border-radius: 0 7px 7px 0;\n  outline: none;\n  background: transparent;\n  color: var(--kme-muted);\n  cursor: pointer;\n  font: 16px/1 -apple-system, BlinkMacSystemFont, \"Segoe UI Symbol\", sans-serif;\n  filter: grayscale(1);\n}\n\n.kme-learning-navigator-ai-key-toggle:hover,\n.kme-learning-navigator-ai-key-toggle[aria-pressed=\"true\"] {\n  background: rgba(36, 107, 254, 0.08);\n  color: var(--kme-accent);\n}\n\n.kme-learning-navigator-ai-key-toggle:focus-visible {\n  box-shadow: inset 0 0 0 2px rgba(36, 107, 254, 0.5);\n}\n\n.kme-learning-navigator-ai-config .kme-learning-navigator-row {\n  margin-top: 7px;\n}\n\n.kme-learning-navigator-ai-test {\n  border: 1px solid rgba(36, 107, 254, 0.25);\n  background: rgba(36, 107, 254, 0.08);\n  color: var(--kme-accent);\n}\n\n.kme-learning-navigator-ai-config-actions {\n  display: grid;\n  grid-template-columns: 1fr auto;\n  gap: 7px;\n  margin-top: 9px;\n}\n\n.kme-learning-navigator-ai-clear-key {\n  padding: 0 10px;\n  border: 1px solid var(--kme-line);\n  background: #fff;\n  color: var(--kme-muted);\n}\n\n.kme-learning-navigator-ai-config-status,\n.kme-learning-navigator-ai-config-note {\n  margin-top: 7px;\n  color: var(--kme-muted);\n  font-size: 11px;\n  line-height: 1.45;\n  word-break: break-word;\n}\n\n.kme-learning-navigator-ai-config-status.is-error {\n  color: var(--kme-danger);\n}\n\n/* Render the native checkboxes as compact toggle switches without touching the markup. */\n.kme-learning-navigator-row input[type=\"checkbox\"] {\n  appearance: none;\n  -webkit-appearance: none;\n  position: relative;\n  flex: none;\n  width: 38px;\n  height: 22px;\n  margin: 0;\n  border-radius: 999px;\n  background: #c9cee0;\n  cursor: pointer;\n  transition: background 0.2s ease;\n}\n\n.kme-learning-navigator-row input[type=\"checkbox\"]::after {\n  content: \"\";\n  position: absolute;\n  top: 2px;\n  left: 2px;\n  width: 18px;\n  height: 18px;\n  border-radius: 50%;\n  background: #fff;\n  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);\n  transition: transform 0.2s ease;\n}\n\n.kme-learning-navigator-row input[type=\"checkbox\"]:checked {\n  background: linear-gradient(135deg, var(--kme-accent), var(--kme-accent-2));\n}\n\n.kme-learning-navigator-row input[type=\"checkbox\"]:checked::after {\n  transform: translateX(16px);\n}\n\n.kme-learning-navigator-row input[type=\"checkbox\"]:focus-visible {\n  outline: 2px solid rgba(36, 107, 254, 0.5);\n  outline-offset: 2px;\n}\n\n.kme-learning-navigator-summary {\n  min-height: 18px;\n  margin-top: 12px;\n  padding-top: 11px;\n  border-top: 1px solid var(--kme-line);\n  color: var(--kme-muted);\n  font-size: 12px;\n  word-break: break-word;\n}\n\n.kme-learning-navigator-status {\n  display: flex;\n  align-items: flex-start;\n  gap: 7px;\n  margin-top: 9px;\n  color: var(--kme-ink);\n  opacity: 0.85;\n  font-size: 12px;\n  word-break: break-word;\n}\n\n.kme-learning-navigator-status::before {\n  content: \"\";\n  flex: none;\n  margin-top: 4px;\n  width: 7px;\n  height: 7px;\n  border-radius: 50%;\n  background: linear-gradient(135deg, var(--kme-accent), var(--kme-accent-2));\n}\n\n.kme-learning-navigator-status-text {\n  display: -webkit-box;\n  min-height: 18px;\n  overflow: hidden;\n  -webkit-box-orient: vertical;\n  -webkit-line-clamp: 2;\n}\n\n.kme-learning-navigator-logo-toggle {\n  position: relative;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  width: 52px;\n  height: 52px;\n  margin-left: auto;\n  padding: 0;\n  border: 1px solid var(--kme-line);\n  border-radius: 50%;\n  background: linear-gradient(135deg, #ffffff, #eaf3ff);\n  cursor: pointer;\n  box-shadow: 0 12px 28px rgba(20, 27, 70, 0.22);\n  transition: transform 0.18s ease, box-shadow 0.18s ease;\n}\n\n.kme-learning-navigator-logo-toggle:hover {\n  transform: translateY(-2px) scale(1.04);\n  box-shadow: 0 16px 34px rgba(20, 27, 70, 0.26);\n}\n\n.kme-learning-navigator-logo-toggle:active {\n  transform: translateY(0) scale(0.98);\n}\n\n.kme-learning-navigator-logo-toggle img {\n  width: 32px;\n  height: 32px;\n  display: block;\n  pointer-events: none;\n}\n\n#kme-learning-navigator.open .kme-learning-navigator-logo-toggle {\n  display: none;\n}\n\n.kme-learning-navigator-logo-dot {\n  position: absolute;\n  right: 6px;\n  bottom: 6px;\n  width: 12px;\n  height: 12px;\n  border: 2px solid #fff;\n  border-radius: 50%;\n  background: #9aa0b8;\n}\n\n.kme-learning-navigator-logo-dot.is-running {\n  background: var(--kme-accent-2);\n  animation: kme-pulse 1.8s ease-out infinite;\n}\n\n@keyframes kme-pulse {\n  0% { box-shadow: 0 0 0 0 rgba(33, 191, 174, 0.55); }\n  70% { box-shadow: 0 0 0 7px rgba(33, 191, 174, 0); }\n  100% { box-shadow: 0 0 0 0 rgba(33, 191, 174, 0); }\n}\n\n@media (prefers-color-scheme: dark) {\n  #kme-learning-navigator {\n    --kme-ink: #e7ebff;\n    --kme-muted: rgba(231, 235, 255, 0.6);\n    --kme-line: rgba(231, 235, 255, 0.14);\n    --kme-surface: rgba(28, 32, 54, 0.95);\n  }\n\n  .kme-learning-navigator-secondary {\n    background: rgba(255, 255, 255, 0.06);\n    color: var(--kme-ink);\n  }\n\n  .kme-learning-navigator-task-item,\n  .kme-learning-navigator-task-cancel,\n  .kme-learning-navigator-quiz-result,\n  .kme-learning-navigator-quiz-apply-all,\n  .kme-learning-navigator-ai-clear-key,\n  .kme-learning-navigator-ai-field input,\n  .kme-learning-navigator-ai-field select {\n    background: rgba(255, 255, 255, 0.06);\n    color: var(--kme-ink);\n  }\n\n  .kme-learning-navigator-task-item:hover {\n    background: rgba(36, 107, 254, 0.18);\n  }\n\n  .kme-learning-navigator-secondary:hover {\n    background: rgba(36, 107, 254, 0.18);\n  }\n\n  .kme-learning-navigator-minimize,\n  .kme-learning-navigator-settings {\n    background: rgba(255, 255, 255, 0.06);\n  }\n\n  .kme-learning-navigator-row input[type=\"checkbox\"] {\n    background: rgba(255, 255, 255, 0.18);\n  }\n\n  .kme-learning-navigator-progress-track {\n    background: rgba(255, 255, 255, 0.12);\n  }\n\n  .kme-learning-navigator-logo-toggle {\n    background: linear-gradient(135deg, #2a3050, #1d2238);\n  }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  #kme-learning-navigator *,\n  #kme-learning-navigator.open .kme-learning-navigator-panel {\n    animation: none !important;\n    transition: none !important;\n  }\n}\n";
 
   const KME_USERSCRIPT_HTTP_REQUEST = ({ method, url, headers, body, timeoutMs }) => new Promise((resolve, reject) => {
     try {
@@ -129,7 +129,7 @@
   const AI_QUIZ_CONFIDENCE_THRESHOLD = 0.65;
   const AI_REQUEST_TIMEOUT_MS = 60000;
   const AI_QUIZ_RESULT_WAIT_MS = 20000;
-  const AI_QUIZ_MAX_ANALYSIS_ATTEMPTS = 2;
+  const AI_RETRY_DELAYS_MS = [800, 1600, 3200];
   const AI_QUIZ_FAILURE_STABILITY_MS = 2500;
   const STORAGE_OPERATION_TIMEOUT_MS = 3000;
   const MEDIA_PLAY_TIMEOUT_MS = 5000;
@@ -143,6 +143,8 @@
     aiQuizAutoSubmit: true,
     aiEndpoint: "https://api.openai.com/v1/chat/completions",
     aiModel: "",
+    aiReasoningEffort: "auto",
+    aiRetryCount: 1,
     aiRememberApiKey: false,
     aiApiKey: "",
     panelOpen: true,
@@ -296,6 +298,12 @@
     }
   };
 
+  function modelRequestError(message, retryable = true) {
+    const error = new Error(message);
+    error.retryable = retryable;
+    return error;
+  }
+
   async function modelHttpRequest({ url, headers, body, timeoutMs = AI_REQUEST_TIMEOUT_MS }) {
     if (typeof KME_USERSCRIPT_HTTP_REQUEST === "function") {
       return KME_USERSCRIPT_HTTP_REQUEST({
@@ -323,10 +331,10 @@
         responseText: await response.text()
       };
     } catch (error) {
-      if (error?.name === "AbortError") throw new Error("模型请求超时，请稍后重试");
+      if (error?.name === "AbortError") throw modelRequestError("模型请求超时，请稍后重试");
       // Only the extension reaches this fetch path (the userscript delegates to
       // GM_xmlhttpRequest above), so the guidance is about CORS, not @connect.
-      throw new Error("模型接口请求失败，请检查网络，或确认模型接口允许浏览器跨域访问");
+      throw modelRequestError("模型接口请求失败，请检查网络，或确认模型接口允许浏览器跨域访问");
     } finally {
       window.clearTimeout(timer);
     }
@@ -659,24 +667,56 @@
   function validateAiConfig() {
     const endpoint = normalize(String(state.settings.aiEndpoint || ""));
     const model = normalize(String(state.settings.aiModel || ""));
-    if (!endpoint) throw new Error("请先填写模型接口地址");
-    if (!model) throw new Error("请先填写模型名称");
+    if (!endpoint) throw modelRequestError("请先填写模型接口地址", false);
+    if (!model) throw modelRequestError("请先填写模型名称", false);
 
     let parsed;
     try {
       parsed = new URL(endpoint);
     } catch {
-      throw new Error("模型接口地址格式不正确");
+      throw modelRequestError("模型接口地址格式不正确", false);
     }
     const localHttp = parsed.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname);
     if (parsed.protocol !== "https:" && !localHttp) {
-      throw new Error("远程模型接口必须使用 HTTPS；本机接口可使用 localhost HTTP");
+      throw modelRequestError("远程模型接口必须使用 HTTPS；本机接口可使用 localhost HTTP", false);
     }
+    const reasoningEffort = ["none", "low", "medium", "high"].includes(state.settings.aiReasoningEffort)
+      ? state.settings.aiReasoningEffort
+      : "auto";
     return {
       endpoint: parsed.href,
       model,
+      reasoningEffort,
       apiKey: state.aiSessionApiKey.trim()
     };
+  }
+
+  function aiRetryCount() {
+    return Math.min(AI_RETRY_DELAYS_MS.length, Math.max(0, Math.trunc(Number(state.settings.aiRetryCount) || 0)));
+  }
+
+  function aiErrorText(value) {
+    if (typeof value === "string") return value;
+    if (value === undefined || value === null) return "";
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+
+  function upstreamAiError(data, responseText, statusText, apiKey) {
+    let detail = [
+      data?.error?.message,
+      data?.error?.detail,
+      data?.message,
+      data?.detail,
+      data?.error,
+      responseText,
+      statusText
+    ].map(aiErrorText).map(normalize).find(Boolean) || "";
+    if (apiKey) detail = detail.split(apiKey).join("***");
+    return detail.slice(0, 600);
   }
 
   function aiResponseContent(data) {
@@ -696,32 +736,46 @@
       "Content-Type": "application/json"
     };
     if (config.apiKey) headers.Authorization = `Bearer ${config.apiKey}`;
+    const requestBody = {
+      model: config.model,
+      messages,
+      stream: false
+    };
+    if (config.reasoningEffort !== "auto") requestBody.reasoning_effort = config.reasoningEffort;
     const response = await modelHttpRequest({
       url: config.endpoint,
       headers,
-      body: JSON.stringify({
-        model: config.model,
-        messages,
-        stream: false
-      })
+      body: JSON.stringify(requestBody)
     });
 
+    const responseText = String(response.responseText || "");
     let data;
     try {
-      data = JSON.parse(response.responseText || "{}");
+      data = JSON.parse(responseText || "{}");
     } catch {
+      const detail = upstreamAiError(null, responseText, response.statusText, config.apiKey);
       if (response.status < 200 || response.status >= 300) {
-        throw new Error(`模型接口返回 HTTP ${response.status}`);
+        const retryable = response.status === 0 || response.status === 408 || response.status === 409 ||
+          response.status === 425 || response.status === 429 || response.status >= 500;
+        throw modelRequestError(`模型接口返回 HTTP ${response.status}${detail ? `：${detail}` : ""}`, retryable);
       }
-      throw new Error("模型接口没有返回有效 JSON");
+      throw modelRequestError(`模型接口没有返回有效 JSON${detail ? `：${detail}` : ""}`);
     }
     if (response.status < 200 || response.status >= 300) {
-      let detail = normalize(data?.error?.message || response.statusText || "请求失败").slice(0, 180);
-      if (config.apiKey) detail = detail.split(config.apiKey).join("***");
-      throw new Error(`模型接口返回 HTTP ${response.status}${detail ? `：${detail}` : ""}`);
+      const detail = upstreamAiError(data, responseText, response.statusText || "请求失败", config.apiKey);
+      const retryable = response.status === 0 || response.status === 408 || response.status === 409 ||
+        response.status === 425 || response.status === 429 || response.status >= 500;
+      throw modelRequestError(`模型接口返回 HTTP ${response.status}${detail ? `：${detail}` : ""}`, retryable);
+    }
+    if (data?.error) {
+      const detail = upstreamAiError(data, responseText, response.statusText, config.apiKey);
+      throw modelRequestError(`模型接口返回错误${detail ? `：${detail}` : ""}`, false);
     }
     const content = aiResponseContent(data);
-    if (!content) throw new Error("模型响应里没有找到回答内容");
+    if (!content) {
+      const detail = upstreamAiError(data, "", response.statusText, config.apiKey);
+      throw modelRequestError(`模型响应里没有找到回答内容${detail ? `：${detail}` : ""}`);
+    }
     return content;
   }
 
@@ -842,24 +896,47 @@
     const fingerprint = quizFingerprint(questions);
     resetQuizResult(fingerprint, questions);
     state.quizBusy = true;
-    state.quizMessage = `正在请求模型分析 ${questions.length} 道题…`;
-    setStatus(state.quizMessage);
-    updateQuizDisplay(true);
+    state.quizAutoAttempts = 0;
+    const maxAttempts = aiRetryCount() + 1;
+    let completed = false;
     try {
-      const content = await requestAiContent(quizMessages(questions));
-      const answers = validateAiAnswers(parseAiJson(content), questions);
-      state.quizAnswers = answers;
-      const valid = answers.filter((answer) => answer.valid).length;
-      const low = answers.filter((answer) => answer.valid && answer.confidence < AI_QUIZ_CONFIDENCE_THRESHOLD).length;
-      state.quizMessage = `AI 已返回 ${valid}/${questions.length} 题${low ? `，其中 ${low} 题置信度较低` : ""}`;
-      state.quizError = valid ? "" : "模型没有返回可用答案";
-      setStatus(state.quizMessage);
-      return valid === questions.length;
-    } catch (error) {
-      state.quizError = normalize(error?.message || "AI 分析失败");
-      state.quizMessage = "";
-      setStatus(`AI 分析失败：${state.quizError}`);
-      return false;
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        state.quizAutoAttempts = attempt;
+        state.quizAnswers = [];
+        state.quizError = "";
+        state.quizMessage = attempt === 1
+          ? `正在请求模型分析 ${questions.length} 道题…`
+          : `正在进行第 ${attempt}/${maxAttempts} 次模型分析…`;
+        setStatus(state.quizMessage);
+        updateQuizDisplay(true);
+
+        let retryable = true;
+        try {
+          const content = await requestAiContent(quizMessages(questions));
+          const answers = validateAiAnswers(parseAiJson(content), questions);
+          state.quizAnswers = answers;
+          const valid = answers.filter((answer) => answer.valid).length;
+          const low = answers.filter((answer) => answer.valid && answer.confidence < AI_QUIZ_CONFIDENCE_THRESHOLD).length;
+          state.quizMessage = `AI 已返回 ${valid}/${questions.length} 题${low ? `，其中 ${low} 题置信度较低` : ""}`;
+          state.quizError = valid === questions.length ? "" : `模型只返回了 ${valid}/${questions.length} 道有效答案`;
+          completed = valid === questions.length;
+        } catch (error) {
+          state.quizError = normalize(error?.message || "AI 分析失败");
+          state.quizMessage = "";
+          retryable = error?.retryable !== false;
+        }
+
+        if (completed || !retryable || attempt >= maxAttempts) break;
+        const delayMs = AI_RETRY_DELAYS_MS[attempt - 1];
+        state.quizMessage = `第 ${attempt} 次分析失败，${delayMs / 1000} 秒后重试 (${attempt + 1}/${maxAttempts})`;
+        setStatus(`${state.quizMessage}：${state.quizError}`);
+        updateQuizDisplay(true);
+        await sleep(delayMs);
+      }
+
+      if (completed) setStatus(state.quizMessage);
+      else setStatus(`AI 分析失败：${state.quizError || "模型没有返回可用答案"}`);
+      return completed;
     } finally {
       state.quizBusy = false;
       state.quizRenderSignature = "";
@@ -1181,20 +1258,8 @@
       return;
     }
 
-    let analyzed = false;
-    for (let attempt = 1; attempt <= AI_QUIZ_MAX_ANALYSIS_ATTEMPTS; attempt += 1) {
-      state.quizAutoAttempts = attempt;
-      state.quizAutoPhase = "analyzing";
-      analyzed = await analyzeQuiz();
-      if (analyzed || !automaticQuizActive()) break;
-      if (attempt < AI_QUIZ_MAX_ANALYSIS_ATTEMPTS) {
-        state.quizError = "";
-        state.quizMessage = `AI 分析失败，正在进行第 ${attempt + 1} 次尝试…`;
-        setStatus(state.quizMessage);
-        updateQuizDisplay(true);
-        await sleep(1200);
-      }
-    }
+    state.quizAutoPhase = "analyzing";
+    const analyzed = await analyzeQuiz();
     if (!automaticQuizActive()) {
       state.quizAutoPhase = "idle";
       return;
@@ -2628,9 +2693,9 @@
     label.textContent = labelText;
     const input = document.createElement("input");
     input.type = type;
-    input.placeholder = key === "aiApiKey" && state.aiSessionApiKey ? "已配置；输入新 Key 可替换" : placeholder;
+    input.placeholder = placeholder;
     input.autocomplete = type === "password" ? "off" : "on";
-    input.value = key === "aiApiKey" ? "" : String(state.settings[key] || "");
+    input.value = key === "aiApiKey" ? state.aiSessionApiKey : String(state.settings[key] || "");
     input.setAttribute(`data-${EXT_ID}-ai-field`, key);
     input.addEventListener("input", () => {
       if (key !== "aiApiKey") state.settings[key] = input.value.trim();
@@ -2638,17 +2703,57 @@
     input.addEventListener("change", async () => {
       if (key === "aiApiKey") {
         const nextKey = input.value.trim();
-        if (!nextKey) return;
+        input.value = nextKey;
         state.aiSessionApiKey = nextKey;
+        state.settings.aiApiKey = state.settings.aiRememberApiKey ? nextKey : "";
         if (state.settings.aiRememberApiKey) await storage.set({ aiApiKey: nextKey });
-        input.value = "";
-        input.placeholder = "已配置；输入新 Key 可替换";
         return;
       }
       state.settings[key] = input.value.trim();
       await storage.set({ [key]: state.settings[key] });
     });
-    wrap.append(label, input);
+    if (key === "aiApiKey") {
+      const control = document.createElement("div");
+      control.className = `${EXT_ID}-ai-key-control`;
+      const toggle = document.createElement("button");
+      toggle.id = `${EXT_ID}-ai-key-toggle`;
+      toggle.type = "button";
+      toggle.className = `${EXT_ID}-ai-key-toggle`;
+      toggle.textContent = "👁";
+      toggle.title = "显示 API Key";
+      toggle.setAttribute("aria-label", "显示 API Key");
+      toggle.setAttribute("aria-pressed", "false");
+      toggle.addEventListener("click", () => {
+        const visible = input.type === "text";
+        input.type = visible ? "password" : "text";
+        toggle.title = visible ? "显示 API Key" : "隐藏 API Key";
+        toggle.setAttribute("aria-label", toggle.title);
+        toggle.setAttribute("aria-pressed", String(!visible));
+      });
+      control.append(input, toggle);
+      wrap.append(label, control);
+    } else {
+      wrap.append(label, input);
+    }
+    return wrap;
+  }
+
+  function aiConfigSelect(labelText, key, options) {
+    const wrap = document.createElement("label");
+    wrap.className = `${EXT_ID}-ai-field`;
+    const label = document.createElement("span");
+    label.textContent = labelText;
+    const select = document.createElement("select");
+    select.setAttribute(`data-${EXT_ID}-ai-field`, key);
+    options.forEach(([value, text]) => select.add(new Option(text, value)));
+    select.value = key === "aiRetryCount" ? String(aiRetryCount()) : String(state.settings[key] || "auto");
+    select.addEventListener("change", async () => {
+      const value = key === "aiRetryCount" ? Number(select.value) : select.value;
+      state.settings[key] = value;
+      await storage.set({ [key]: value });
+      updateQuizDisplay(true);
+    });
+    wrap.append(label, select);
     return wrap;
   }
 
@@ -2668,6 +2773,19 @@
         placeholder: "https://example.com/v1/chat/completions"
       }),
       aiConfigField("模型名称", "aiModel", { placeholder: "例如模型 ID" }),
+      aiConfigSelect("思考强度", "aiReasoningEffort", [
+        ["auto", "跟随模型"],
+        ["none", "不思考"],
+        ["low", "低"],
+        ["medium", "中"],
+        ["high", "高"]
+      ]),
+      aiConfigSelect("失败重试", "aiRetryCount", [
+        ["0", "不重试"],
+        ["1", "1 次"],
+        ["2", "2 次"],
+        ["3", "3 次"]
+      ]),
       aiConfigField("API Key（本地接口可留空）", "aiApiKey", {
         type: "password",
         placeholder: "输入 API Key；本地接口可留空"
@@ -2698,7 +2816,14 @@
       const input = document.querySelector(`[data-${EXT_ID}-ai-field='aiApiKey']`);
       if (input) {
         input.value = "";
+        input.type = "password";
         input.placeholder = "本地接口可留空";
+      }
+      const toggle = document.querySelector(`#${EXT_ID}-ai-key-toggle`);
+      if (toggle) {
+        toggle.title = "显示 API Key";
+        toggle.setAttribute("aria-label", toggle.title);
+        toggle.setAttribute("aria-pressed", "false");
       }
       updateAiConfigStatus("已清除当前会话和本地存储中的 API Key", false);
     });
@@ -2708,7 +2833,7 @@
     status.className = `${EXT_ID}-ai-config-status`;
     const note = document.createElement("div");
     note.className = `${EXT_ID}-ai-config-note`;
-    note.textContent = "只会发送课程标题、可见题干和选项；全自动模式会填写、提交，并在通过后继续学习。";
+    note.textContent = "思考强度通过 reasoning_effort 发送；鉴权和参数错误会直接显示，超时、限流与服务异常按设置重试。";
     config.append(configActions, status, note);
     return config;
   }
@@ -2843,7 +2968,7 @@
     all.disabled = state.quizBusy || !valid.length;
     all.textContent = `应用全部有效答案 (${valid.length})`;
     note.textContent = automatic
-      ? "全自动模式会填写全部有效答案并提交；分析或页面操作失败时自动停止，最多请求模型 2 次。"
+      ? `全自动模式会填写全部有效答案并提交；模型分析失败时最多重试 ${aiRetryCount()} 次。`
       : "手动模式会保留答案预览和回填按钮，提交继续使用平台原生按钮。";
 
     const signature = JSON.stringify({
@@ -3196,6 +3321,8 @@
           quiz: {
             enabled: Boolean(state.settings.aiQuizEnabled),
             autoSubmit: Boolean(state.settings.aiQuizAutoSubmit),
+            reasoningEffort: state.settings.aiReasoningEffort,
+            retryCount: aiRetryCount(),
             detected: pageLooksQuestion(),
             questions: state.quizQuestions.length,
             answers: state.quizAnswers.map((answer) => ({

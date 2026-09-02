@@ -726,8 +726,14 @@ try {
       return style;
     };
     window.__mockModelRequests = [];
+    window.__mockAiHttpResponses = [];
     const mockModelResponse = () => JSON.stringify({
       choices: [{ message: { content: window.__mockAiResponse || '{"answers":[]}' } }]
+    });
+    const nextMockModelResponse = () => window.__mockAiHttpResponses.shift() || ({
+      status: 200,
+      statusText: "OK",
+      responseText: mockModelResponse()
     });
     window.GM_xmlhttpRequest = (details) => {
       window.__mockModelRequests.push({
@@ -736,8 +742,9 @@ try {
         headers: details.headers,
         body: details.data
       });
+      const response = nextMockModelResponse();
       const timer = window.setTimeout(() => {
-        details.onload?.({ status: 200, statusText: "OK", responseText: mockModelResponse() });
+        details.onload?.(response);
       }, 60);
       return {
         abort() {
@@ -756,8 +763,10 @@ try {
         headers: init?.headers,
         body: init?.body
       });
-      return new Response(mockModelResponse(), {
-        status: 200,
+      const response = nextMockModelResponse();
+      return new Response(response.responseText, {
+        status: response.status,
+        statusText: response.statusText,
         headers: { "Content-Type": "application/json" }
       });
     };
@@ -1141,6 +1150,8 @@ try {
       skipQuestions: false,
       aiEndpoint: "https://mock-ai.example/v1/chat/completions",
       aiModel: "mock-answer-model",
+      aiReasoningEffort: "none",
+      aiRetryCount: 2,
       aiRememberApiKey: true,
       aiApiKey: "test-only-key"
     };
@@ -1163,19 +1174,35 @@ try {
   const quizConfig = await quizPage.evaluate(() => ({
     endpoint: document.querySelector('[data-kme-learning-navigator-ai-field="aiEndpoint"]')?.value,
     model: document.querySelector('[data-kme-learning-navigator-ai-field="aiModel"]')?.value,
+    reasoningEffort: document.querySelector('[data-kme-learning-navigator-ai-field="aiReasoningEffort"]')?.value,
+    retryCount: document.querySelector('[data-kme-learning-navigator-ai-field="aiRetryCount"]')?.value,
     keyType: document.querySelector('[data-kme-learning-navigator-ai-field="aiApiKey"]')?.type,
     keyValue: document.querySelector('[data-kme-learning-navigator-ai-field="aiApiKey"]')?.value,
+    keyToggleLabel: document.querySelector('#kme-learning-navigator-ai-key-toggle')?.getAttribute("aria-label"),
     aiEnabled: document.querySelector('[data-kme-learning-navigator-setting="aiQuizEnabled"]')?.checked,
     autoSubmit: document.querySelector('[data-kme-learning-navigator-setting="aiQuizAutoSubmit"]')?.checked,
     skipQuestions: document.querySelector('[data-kme-learning-navigator-setting="skipQuestions"]')?.checked
   }));
   if (quizConfig.endpoint !== "https://mock-ai.example/v1/chat/completions" ||
       quizConfig.model !== "mock-answer-model" ||
+      quizConfig.reasoningEffort !== "none" ||
+      quizConfig.retryCount !== "2" ||
       quizConfig.keyType !== "password" ||
-      quizConfig.keyValue !== "" ||
+      quizConfig.keyValue !== "test-only-key" ||
+      quizConfig.keyToggleLabel !== "显示 API Key" ||
       !quizConfig.aiEnabled || quizConfig.autoSubmit || quizConfig.skipQuestions) {
     throw new Error(`quiz AI config UI failed: ${JSON.stringify(quizConfig)}`);
   }
+  await quizPage.locator("#kme-learning-navigator-ai-key-toggle").click();
+  const visibleKey = await quizPage.evaluate(() => ({
+    type: document.querySelector('[data-kme-learning-navigator-ai-field="aiApiKey"]')?.type,
+    value: document.querySelector('[data-kme-learning-navigator-ai-field="aiApiKey"]')?.value,
+    label: document.querySelector("#kme-learning-navigator-ai-key-toggle")?.getAttribute("aria-label")
+  }));
+  if (visibleKey.type !== "text" || visibleKey.value !== "test-only-key" || visibleKey.label !== "隐藏 API Key") {
+    throw new Error(`quiz API key reveal failed: ${JSON.stringify(visibleKey)}`);
+  }
+  await quizPage.locator("#kme-learning-navigator-ai-key-toggle").click();
   await quizPage.locator('[data-kme-learning-navigator-setting="skipQuestions"]').click();
   await quizPage.waitForFunction(() => (
     document.querySelector('[data-kme-learning-navigator-setting="skipQuestions"]')?.checked &&
@@ -1222,6 +1249,7 @@ try {
   if (quizAnalyzed.request.url !== "https://mock-ai.example/v1/chat/completions" ||
       !quizAnalyzed.request.hasAuthorization ||
       quizAnalyzed.request.body.model !== "mock-answer-model" ||
+      quizAnalyzed.request.body.reasoning_effort !== "none" ||
       !quizPrompt.includes("新时代的硬道理") ||
       quizPrompt.includes("answerResult") ||
       JSON.stringify(quizAnalyzed.request.body).includes("test-only-key") ||
@@ -1281,15 +1309,66 @@ try {
   if (quizFinal.submitCount !== 0 || !quizFinal.status.includes("请检查后")) {
     throw new Error(`quiz apply-all / submit guard failed: ${JSON.stringify(quizFinal)}`);
   }
-  await quizPage.evaluate(() => { window.__mockAiResponse = "model returned plain text"; });
+
+  await quizPage.evaluate(() => {
+    window.__mockAiHttpResponses = [{
+      status: 503,
+      statusText: "Service Unavailable",
+      responseText: JSON.stringify({ error: { message: "上游服务繁忙" } })
+    }];
+  });
   await quizPage.locator("#kme-learning-navigator-quiz-analyze").click();
-  await quizPage.waitForFunction(() => Boolean(window.__kmeLearningNavigator?.inspect?.()?.quiz?.error), undefined, { timeout: 5000 });
+  await quizPage.waitForFunction(() => (
+    window.__mockModelRequests.length === 3 &&
+    window.__kmeLearningNavigator?.inspect?.()?.quiz?.answers?.length === 3
+  ), undefined, { timeout: 10000 });
+  const retryState = await quizPage.evaluate(() => window.__kmeLearningNavigator.inspect().quiz);
+  if (retryState.attempts !== 2 || retryState.error) {
+    throw new Error(`quiz transient retry failed: ${JSON.stringify(retryState)}`);
+  }
+
+  await quizPage.evaluate(() => {
+    window.__mockAiHttpResponses = [{
+      status: 401,
+      statusText: "Unauthorized",
+      responseText: JSON.stringify({ error: { message: "上游鉴权失败 test-only-key" } })
+    }];
+  });
+  await quizPage.locator("#kme-learning-navigator-quiz-analyze").click();
+  await quizPage.waitForFunction(() => (
+    window.__mockModelRequests.length === 4 &&
+    window.__kmeLearningNavigator?.inspect?.()?.quiz?.error?.includes("上游鉴权失败")
+  ), undefined, { timeout: 5000 });
+  const upstreamErrorState = await quizPage.evaluate(() => ({
+    error: window.__kmeLearningNavigator.inspect().quiz.error,
+    attempts: window.__kmeLearningNavigator.inspect().quiz.attempts,
+    requests: window.__mockModelRequests.length,
+    visibleError: document.querySelector("#kme-learning-navigator-quiz-error")?.innerText || ""
+  }));
+  if (upstreamErrorState.attempts !== 1 ||
+      upstreamErrorState.requests !== 4 ||
+      !upstreamErrorState.visibleError.includes("上游鉴权失败") ||
+      upstreamErrorState.error.includes("test-only-key")) {
+    throw new Error(`quiz upstream error display failed: ${JSON.stringify(upstreamErrorState)}`);
+  }
+
+  await quizPage.evaluate(() => {
+    const retry = document.querySelector('[data-kme-learning-navigator-ai-field="aiRetryCount"]');
+    retry.value = "1";
+    retry.dispatchEvent(new Event("change", { bubbles: true }));
+    window.__mockAiResponse = "model returned plain text";
+  });
+  await quizPage.locator("#kme-learning-navigator-quiz-analyze").click();
+  await quizPage.waitForFunction(() => (
+    window.__mockModelRequests.length === 6 &&
+    window.__kmeLearningNavigator?.inspect?.()?.quiz?.error?.includes("JSON")
+  ), undefined, { timeout: 5000 });
   const quizErrorState = await quizPage.evaluate(() => ({
     error: window.__kmeLearningNavigator.inspect().quiz.error,
     requests: window.__mockModelRequests.length,
     submitCount: window.__mockQuizSubmitCount
   }));
-  if (!quizErrorState.error.includes("JSON") || quizErrorState.requests !== 2 || quizErrorState.submitCount !== 0) {
+  if (!quizErrorState.error.includes("JSON") || quizErrorState.requests !== 6 || quizErrorState.submitCount !== 0) {
     throw new Error(`quiz malformed-response guard failed: ${JSON.stringify(quizErrorState)}`);
   }
 
