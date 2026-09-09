@@ -4,7 +4,7 @@
 
 **把「点开 → 等播完 → 返回 → 下一门」的机械重复交给浏览器，把时间还给你。**
 
-[![版本](https://img.shields.io/badge/版本-v2.13.0-1f6feb)](https://github.com/skyjt/kmelearning-helper/releases/latest)
+[![版本](https://img.shields.io/badge/版本-v2.13.1-1f6feb)](https://github.com/skyjt/kmelearning-helper/releases/latest)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-4285F4?logo=googlechrome&logoColor=white)](https://github.com/skyjt/kmelearning-helper/releases/latest)
 [![油猴脚本](https://img.shields.io/badge/Tampermonkey-支持-00485B?logo=tampermonkey&logoColor=white)](https://raw.githubusercontent.com/skyjt/kmelearning-helper/main/userscript/kme-learning-helper.user.js)
@@ -94,7 +94,7 @@ ZIP 不能直接加载，必须先解压。更新时下载新包解压替换原�
 
 也可以直接进入某个课程目录页，再点 **开始自动学习**，使用目录学习方式。
 
-> 💡 浮窗可以最小化成右下角的小图标，点一下或鼠标移上去就能展开。
+> 💡 浮窗可以最小化成右下角的小图标，点击图标即可展开。
 
 ### ③ 选择做题方式
 
@@ -126,7 +126,7 @@ ZIP 不能直接加载，必须先解压。更新时下载新包解压替换原�
 
 ### 设置项
 
-点浮窗右上角的 **⚙**，卡片会**翻转**到背面的设置面；改完点「**完成**」翻回正面，改动即时生效：
+点浮窗右上角的 **⚙**，卡片会**翻转**到背面的设置面；改完点「**完成**」翻回正面，改动即时生效；也可在设置内按 **Esc** 返回，键盘焦点会回到设置按钮：
 
 | 设置 | 作用 |
 | --- | --- |
@@ -192,10 +192,11 @@ ZIP 不能直接加载，必须先解压。更新时下载新包解压替换原�
 
 ## 最近更新
 
-最近一次更新（**v2.13.0**）：模型配置新增思考强度和 0-3 次失败重试；API Key 可通过眼睛按钮显隐；上游错误正文会脱敏后直接显示。
+最近一次更新（**v2.13.1**）：停止学习后取消待执行点击和交卷确认；模型返回未知选项时整题判为无效；完善设置卡片的键盘操作、小窗口适配和深色样式。
 
 | 版本 | 主要变化 |
 | --- | --- |
+| **v2.13.1** | 修复停止后的残留操作、无效选项校验及设置卡片的焦点和窗口适配 |
 | **v2.13.0** | 新增思考强度、可配置退避重试、API Key 显隐和上游错误展示 |
 | **v2.12.3** | 持续等待延迟出现的交卷确认弹窗，修复提交后误报未识别测验结果 |
 | **v2.12.0** | 修复浮窗多处显示失效与自动学习若干边界问题；浮窗正面限高、状态截断、点击展开、Esc 取消；后台标签页与答题区扫描性能优化 |

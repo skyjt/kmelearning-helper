@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import assert from "node:assert/strict";
 import Module from "node:module";
 import path from "node:path";
 import { createRequire } from "node:module";
@@ -787,6 +788,106 @@ try {
             : (requestUrl.includes("/home/index") ? homeHtml : html)))));
     route.fulfill({ status: 200, contentType: "text/html", body });
   });
+
+  // A loading page must not let the platform-control scanner click the helper itself.
+  const loadingPage = await context.newPage();
+  await loadingPage.goto("https://pc.kmelearning.com/loading");
+  await loadingPage.evaluate(() => {
+    document.body.replaceChildren();
+    history.replaceState({}, "", "/loading");
+  });
+  await injectHelper(loadingPage);
+  await loadingPage.waitForSelector("#kme-learning-navigator");
+  await loadingPage.locator(".kme-learning-navigator-logo-toggle").click();
+  await loadingPage.evaluate(() => {
+    window.__reviewClicks = 0;
+    const button = document.createElement("button");
+    button.textContent = "开始检查";
+    button.onclick = () => { window.__reviewClicks += 1; };
+    document.querySelector(".kme-learning-navigator-face-front").append(button);
+  });
+  await loadingPage.evaluate(() => window.__kmeLearningNavigator.start());
+  await loadingPage.waitForTimeout(300);
+  assert.equal(await loadingPage.evaluate(() => window.__kmeLearningNavigator.inspect().running), true,
+    "platform scanning must ignore the helper's stop/start controls");
+  assert.equal(await loadingPage.evaluate(() => window.__reviewClicks), 0);
+  await loadingPage.evaluate(async () => {
+    const button = document.createElement("button");
+    button.textContent = "进入学习";
+    button.onclick = () => { window.__reviewClicks += 1; };
+    document.body.append(button);
+    await window.__kmeLearningNavigator.tick("review");
+    await window.__kmeLearningNavigator.stop();
+  });
+  await loadingPage.waitForTimeout(250);
+  assert.equal(await loadingPage.evaluate(() => window.__reviewClicks), 0, "stopping must cancel a queued platform click");
+  await loadingPage.close();
+
+  const reviewPage = await context.newPage();
+  await reviewPage.goto("https://pc.kmelearning.com/jsncxyslhs/home/course/quiz-ai-review");
+  await reviewPage.evaluate((currentTarget) => {
+    const settings = {
+      aiQuizEnabled: true, aiQuizAutoSubmit: false, skipQuestions: false,
+      aiEndpoint: "https://mock-ai.example/v1/chat/completions", aiModel: "mock", aiRetryCount: 0
+    };
+    Object.assign(currentTarget === "userscript" ? window.__mockUserscriptStorage : window.__mockChromeStorage, settings);
+    window.__mockAiResponse = JSON.stringify({ answers: [
+      { question: 1, selected: ["B"], confidence: 0.9 },
+      { question: 2, selected: ["A", "Z"], confidence: 0.9 },
+      { question: 3, selected: ["A"], confidence: 0.9 }
+    ] });
+  }, target);
+  await injectHelper(reviewPage);
+  await reviewPage.waitForSelector("#kme-learning-navigator-quiz", { state: "visible" });
+  assert.equal(await reviewPage.locator(".kme-learning-navigator-face-back").evaluate(el => el.inert), true);
+  await reviewPage.locator(".kme-learning-navigator-settings").click();
+  assert.equal(await reviewPage.locator(".kme-learning-navigator-face-front").evaluate(el => el.inert), true);
+  assert.equal(await reviewPage.evaluate(() => document.activeElement?.textContent), "完成");
+  await reviewPage.waitForTimeout(650);
+  await reviewPage.setViewportSize({ width: 375, height: 420 });
+  await reviewPage.waitForFunction(() => {
+    const rect = document.querySelector(".kme-learning-navigator-panel").getBoundingClientRect();
+    return rect.top >= 0 && rect.left >= 0 && rect.bottom <= innerHeight && rect.right <= innerWidth;
+  });
+  fs.mkdirSync(path.join(sourceExtensionPath, "dist"), { recursive: true });
+  await reviewPage.screenshot({ path: path.join(sourceExtensionPath, "dist", `review-settings-${target}.png`) });
+  await reviewPage.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  await reviewPage.screenshot({ path: path.join(sourceExtensionPath, "dist", `review-settings-dark-${target}.png`) });
+  await reviewPage.keyboard.press("Escape");
+  await reviewPage.waitForFunction(() => !document.querySelector("#kme-learning-navigator").classList.contains("flipped"));
+  assert.equal(await reviewPage.evaluate(() => document.activeElement?.getAttribute("aria-label")), "打开设置");
+  await reviewPage.setViewportSize({ width: 1280, height: 720 });
+  await reviewPage.locator("#kme-learning-navigator-quiz-analyze").click();
+  await reviewPage.waitForFunction(() => !window.__kmeLearningNavigator.inspect().quiz.busy);
+  assert.equal(await reviewPage.evaluate(() => window.__kmeLearningNavigator.inspect().quiz.answers[1]?.valid), false,
+    "an answer containing an unknown option must be invalid in full");
+  await reviewPage.close();
+
+  for (const stopDelay of [0, 3200]) {
+    const stoppedQuizPage = await context.newPage();
+    await stoppedQuizPage.goto("https://pc.kmelearning.com/jsncxyslhs/home/course/quiz-ai-stop");
+    await stoppedQuizPage.evaluate((currentTarget) => {
+      window.__mockQuizConfirmDelayMs = 3500;
+      const settings = {
+        aiQuizEnabled: true, aiQuizAutoSubmit: true, skipQuestions: false,
+        aiEndpoint: "https://mock-ai.example/v1/chat/completions", aiModel: "mock"
+      };
+      Object.assign(currentTarget === "userscript" ? window.__mockUserscriptStorage : window.__mockChromeStorage, settings);
+    }, target);
+    await injectHelper(stoppedQuizPage);
+    await stoppedQuizPage.waitForSelector(".kme-learning-navigator-primary", { state: "visible" });
+    await stoppedQuizPage.locator(".kme-learning-navigator-primary").click();
+    await stoppedQuizPage.waitForFunction(() => window.__mockQuizSubmitCount === 1);
+    await stoppedQuizPage.waitForTimeout(stopDelay);
+    await stoppedQuizPage.evaluate(() => window.__kmeLearningNavigator.stop());
+    await stoppedQuizPage.waitForTimeout(4300);
+    assert.deepEqual(await stoppedQuizPage.evaluate(() => ({
+      confirmations: window.__mockQuizConfirmCount, next: window.__mockNextLessonCount,
+      running: window.__kmeLearningNavigator.inspect().running,
+      status: document.querySelector("#kme-learning-navigator-status-text").textContent
+    })), { confirmations: 0, next: 0, running: false, status: "已停止" });
+    await stoppedQuizPage.close();
+  }
 
   const homePage = context.pages()[0] || await context.newPage();
   await homePage.goto("https://pc.kmelearning.com/jsncxyslhs/home/index");

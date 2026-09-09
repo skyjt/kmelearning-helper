@@ -25,6 +25,13 @@
   display: none !important;
 }
 
+#kme-learning-navigator button:focus-visible,
+#kme-learning-navigator input:focus-visible,
+#kme-learning-navigator select:focus-visible {
+  outline: 2px solid var(--kme-accent);
+  outline-offset: 2px;
+}
+
 .kme-learning-navigator-panel {
   display: none;
   width: min(360px, calc(100vw - 32px));
@@ -54,6 +61,7 @@
 
 .kme-learning-navigator-face {
   width: 100%;
+  overscroll-behavior: contain;
   -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
 }
@@ -868,6 +876,7 @@
   .kme-learning-navigator-quiz-result,
   .kme-learning-navigator-quiz-apply-all,
   .kme-learning-navigator-ai-clear-key,
+  .kme-learning-navigator-ai-key-toggle,
   .kme-learning-navigator-ai-field input,
   .kme-learning-navigator-ai-field select {
     background: rgba(255, 255, 255, 0.06);

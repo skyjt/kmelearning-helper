@@ -340,7 +340,7 @@
   });
 
   function visible(el) {
-    if (!el || !(el instanceof Element)) return false;
+    if (!el || !(el instanceof Element) || state.rootEl?.contains(el)) return false;
     return elementVisible(el);
   }
 
@@ -390,7 +390,8 @@
   }
 
   function clickElement(el, message) {
-    if (!el || !visible(el)) return false;
+    if (!state.settings.running || !el?.isConnected || !visible(el)) return false;
+    const startUrl = location.href;
     const key = targetKey(el);
     if (state.runtime.lastTargetKey === key && now() - Number(state.runtime.lastTargetAt || 0) < 3500) {
       return false;
@@ -402,6 +403,7 @@
     if (message) setStatus(message);
 
     window.setTimeout(() => {
+      if (!state.settings.running || !el.isConnected || location.href !== startUrl) return;
       try {
         el.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, cancelable: true, view: window }));
         el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, view: window }));
@@ -717,21 +719,20 @@
       if (!answer) {
         return { question: question.number, selected: [], confidence: 0, reason: "模型未返回本题答案", valid: false };
       }
-      const selected = [...new Set(rawAnswerSelections(answer)
-        .map((value) => selectionLabel(value, question))
-        .filter(Boolean))];
+      const labels = rawAnswerSelections(answer).map((value) => selectionLabel(value, question));
+      const selected = [...new Set(labels.filter(Boolean))];
       let confidence = Number(answer.confidence);
       if (confidence > 1 && confidence <= 100) confidence /= 100;
       if (!Number.isFinite(confidence)) confidence = 0;
       confidence = Math.min(1, Math.max(0, confidence));
-      const validCount = question.type === "multiple" ? selected.length > 0 : selected.length === 1;
+      const validCount = !labels.includes("") && (question.type === "multiple" ? selected.length > 0 : selected.length === 1);
       return {
         question: question.number,
         selected,
         confidence,
-        reason: normalize(answer.reason || answer.explanation || "").slice(0, 240),
+        reason: normalize(String(answer.reason || answer.explanation || "")).slice(0, 240),
         valid: validCount,
-        error: validCount ? "" : (selected.length ? "该题返回的选项数量不符合题型" : "模型返回了无效选项")
+        error: validCount ? "" : (labels.includes("") || !selected.length ? "模型返回了无效选项" : "该题返回的选项数量不符合题型")
       };
     });
   }
@@ -1083,6 +1084,8 @@
     while (now() < deadline) {
       await sleep(400);
       invalidateScans();
+      if (!automaticQuizActive()) return "cancelled";
+      if (location.href !== startUrl) return "navigated";
       if (!confirmationClicked) {
         const confirm = quizSubmitConfirmationButton();
         if (confirm) {
@@ -1116,6 +1119,8 @@
     for (let index = 0; index < 12; index += 1) {
       await sleep(250);
       invalidateScans();
+      if (!automaticQuizActive()) return "cancelled";
+      if (location.href !== startUrl) return "navigated";
       if (quizResultStatus() !== "pending") break;
       const confirm = quizSubmitConfirmationButton();
       if (confirm) {
@@ -1177,6 +1182,10 @@
     }
 
     const result = await submitAutomaticQuiz();
+    if (!automaticQuizActive() || result === "cancelled") {
+      state.quizAutoPhase = "idle";
+      return;
+    }
     if (result === "passed") {
       state.quizAutoPhase = "completed";
       state.quizMessage = "测验已通过，正在进入下一项学习";
@@ -1828,7 +1837,9 @@
   }
 
   async function returnToCatalog(message = "当前目录项已完成，返回课程列表") {
+    if (!state.settings.running) return false;
     await markCurrentCourseComplete();
+    if (!state.settings.running) return false;
     const back = [...document.querySelectorAll("button, a, [role='button']")]
       .find((el) => visible(el) && !state.rootEl?.contains(el) && /^返回/.test(textOf(el)));
     if (back && clickElement(back, message)) return true;
@@ -2275,11 +2286,16 @@
   }
 
   function hideTaskConfirmation() {
+    const taskKey = state.pendingHomeTaskKey;
     state.pendingHomeTaskKey = "";
     const confirmation = document.querySelector(`#${EXT_ID}-task-confirmation`);
     const list = document.querySelector(`#${EXT_ID}-task-list`);
+    const restoreFocus = confirmation?.contains(document.activeElement);
     if (confirmation) confirmation.hidden = true;
     if (list) list.hidden = false;
+    if (restoreFocus) {
+      [...(list?.querySelectorAll("button") || [])].find((button) => button.dataset.taskKey === taskKey)?.focus({ preventScroll: true });
+    }
   }
 
   function showTaskConfirmation(taskKey) {
@@ -2299,6 +2315,7 @@
     confirmation.hidden = false;
     if (list) list.hidden = true;
     setStatus("等待确认后进入项目");
+    confirmation.querySelector(`.${EXT_ID}-task-cancel`)?.focus({ preventScroll: true });
   }
 
   function updateHomeTaskDisplay(force = false) {
@@ -2523,7 +2540,7 @@
     if (!state.flipped) return;
     window.requestAnimationFrame(() => {
       const faces = currentFaces();
-      if (faces) faces.inner.style.height = `${faces.back.offsetHeight}px`;
+      if (faces && state.flipped) faces.inner.style.height = `${faces.back.offsetHeight}px`;
     });
   }
 
@@ -2738,6 +2755,7 @@
   function buildSettingsFace() {
     const back = document.createElement("div");
     back.className = `${EXT_ID}-face ${EXT_ID}-face-back`;
+    back.inert = true;
 
     const bar = document.createElement("div");
     bar.className = `${EXT_ID}-titlebar`;
@@ -2792,6 +2810,9 @@
     inner.style.height = `${(toBack ? front : back).offsetHeight}px`;
     void inner.offsetHeight; // reflow so the next height write animates from this value
     root.classList.toggle("flipped", toBack);
+    front.inert = toBack;
+    back.inert = !toBack;
+    (toBack ? back.querySelector(`.${EXT_ID}-done`) : front.querySelector(`.${EXT_ID}-settings`))?.focus({ preventScroll: true });
     inner.style.height = `${(toBack ? back : front).offsetHeight}px`;
     window.clearTimeout(state.flipTimer);
     state.flipTimer = window.setTimeout(() => {
@@ -2806,6 +2827,8 @@
     const faces = currentFaces();
     if (!faces) return;
     faces.root.classList.remove("flipped");
+    faces.front.inert = false;
+    faces.back.inert = true;
     faces.inner.style.transition = "";
     faces.inner.style.height = "";
   }
@@ -3000,6 +3023,7 @@
       state.panelOpen = false;
       root.classList.remove("open");
       resetFlip();
+      root.querySelector(`.${EXT_ID}-logo-toggle`)?.focus({ preventScroll: true });
       await storage.set({ panelOpen: false });
     });
 
@@ -3171,6 +3195,7 @@
       if (state.panelOpen) return;
       state.panelOpen = true;
       root.classList.add("open");
+      settingsBtn.focus({ preventScroll: true });
       await storage.set({ panelOpen: true });
       updatePanelSummary();
     };
@@ -3260,11 +3285,16 @@
     renderPanel();
     exposeDebugApi();
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && state.pendingHomeTaskKey) {
+      if (event.key !== "Escape" || !state.rootEl?.contains(event.target)) return;
+      if (state.flipped) {
+        event.preventDefault();
+        flipPanel(false);
+      } else if (state.pendingHomeTaskKey) {
         hideTaskConfirmation();
         setStatus("已取消，请选择需要学习的项目");
       }
     });
+    window.addEventListener("resize", resizeSettingsFace);
     restoreSpeedMenu();
     videos().forEach(bindVideo);
 
