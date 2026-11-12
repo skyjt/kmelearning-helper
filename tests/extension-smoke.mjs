@@ -789,6 +789,52 @@ try {
     route.fulfill({ status: 200, contentType: "text/html", body });
   });
 
+  // Expanded chapter groups are containers; only their lesson rows can be active or clicked.
+  const chapterPage = await context.newPage();
+  await chapterPage.goto("https://pc.kmelearning.com/jsncxyslhs/home/course/chapters");
+  await chapterPage.evaluate(() => {
+    window.__chapterClicks = [];
+    document.body.innerHTML = '<h1>分章节课程</h1><aside class="course-main-sidebar">' +
+      '<div class="scrollBody__Jdo84">' + [
+        ["欢迎词", [["欢迎词", "00:00:58"]]],
+        ["视频综述", [["概述", "00:01:40"], ["产品发展", "00:01:49"]]],
+        ["其他产品", [["产品分类", "00:01:45"]]]
+      ].map(([title, lessons], group) => '<div class="chapters__COXBA ant5-collapse">' +
+        '<div class="ant5-collapse-item ant5-collapse-item-active">' +
+        '<div role="button" aria-expanded="true">' + title + '</div>' +
+        '<div class="ant5-collapse-content ant5-collapse-content-active">' +
+        lessons.map(([name, duration]) => '<div class="cursor-pointer items-center ' +
+          (group === 0 ? 'bg6__fWmBI' : '') + '" style="padding:12px" data-lesson="' + name + '">' +
+          '<span>' + name + '</span> <span>' + duration + '</span>' +
+          (group === 0 ? '<span data-icon="check">✓</span>' : '') + '</div>').join('') +
+        '</div></div></div>').join('') + '</div></aside>';
+    document.querySelectorAll('[data-lesson]').forEach(row => {
+      row.onclick = () => {
+        window.__chapterClicks.push(row.dataset.lesson);
+        document.querySelectorAll('[data-lesson]').forEach(item => item.classList.remove('bg6__fWmBI'));
+        row.classList.add('bg6__fWmBI');
+      };
+    });
+  });
+  await injectHelper(chapterPage);
+  await chapterPage.waitForSelector("#kme-learning-navigator");
+  const chapters = await chapterPage.evaluate(() => window.__kmeLearningNavigator.inspect());
+  assert.deepEqual(chapters.content.map(item => item.complete), [true, false, false, false]);
+  assert.equal(chapters.nextContent, "概述 00:01:40");
+  await chapterPage.evaluate(() => window.__kmeLearningNavigator.start());
+  await chapterPage.waitForFunction(() => window.__chapterClicks.length === 1);
+  await chapterPage.waitForTimeout(5000);
+  await chapterPage.evaluate(() => window.__kmeLearningNavigator.tick("chapter-check"));
+  assert.deepEqual(await chapterPage.evaluate(() => window.__chapterClicks), ["概述"],
+    "a completed sibling and an expanded group must not complete the active lesson");
+  await chapterPage.evaluate(() => {
+    document.querySelector('[data-lesson="概述"]').insertAdjacentHTML('beforeend', '<span data-icon="check">✓</span>');
+  });
+  await chapterPage.evaluate(() => window.__kmeLearningNavigator.tick("chapter-completed"));
+  await chapterPage.waitForFunction(() => window.__chapterClicks.length === 2);
+  assert.deepEqual(await chapterPage.evaluate(() => window.__chapterClicks), ["概述", "产品发展"]);
+  await chapterPage.close();
+
   // A loading page must not let the platform-control scanner click the helper itself.
   const loadingPage = await context.newPage();
   await loadingPage.goto("https://pc.kmelearning.com/loading");

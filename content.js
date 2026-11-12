@@ -1521,8 +1521,8 @@
       "[aria-current='page']"
     ];
     for (const selector of selectors) {
-      const el = document.querySelector(selector);
-      if (visible(el) && meaningfulRowText(textOf(el))) return el;
+      const el = contentItems().find((item) => item.matches(selector) || item.querySelector(selector));
+      if (el) return el;
     }
     return null;
   });
@@ -1540,6 +1540,8 @@
     for (const root of roots) {
       const candidates = [...root.querySelectorAll("button, a, [role='button'], [class*='cursor-pointer'], [class*='item'], [class*='chapter'], [class*='lesson']")]
         .filter(visible)
+        // Expanded chapter headers and their containers are not playable lesson rows.
+        .filter((el) => !el.matches("[aria-expanded]") && !el.querySelector("[aria-expanded]"))
         .filter((el) => {
           const text = textOf(el);
           if (!meaningfulRowText(text)) return false;

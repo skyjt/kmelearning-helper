@@ -4,7 +4,7 @@
 
 **把「点开 → 等播完 → 返回 → 下一门」的机械重复交给浏览器，把时间还给你。**
 
-[![版本](https://img.shields.io/badge/版本-v2.13.1-1f6feb)](https://github.com/skyjt/kmelearning-helper/releases/latest)
+[![版本](https://img.shields.io/badge/版本-v2.13.2-1f6feb)](https://github.com/skyjt/kmelearning-helper/releases/latest)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-4285F4?logo=googlechrome&logoColor=white)](https://github.com/skyjt/kmelearning-helper/releases/latest)
 [![油猴脚本](https://img.shields.io/badge/Tampermonkey-支持-00485B?logo=tampermonkey&logoColor=white)](https://raw.githubusercontent.com/skyjt/kmelearning-helper/main/userscript/kme-learning-helper.user.js)
@@ -192,10 +192,11 @@ ZIP 不能直接加载，必须先解压。更新时下载新包解压替换原�
 
 ## 最近更新
 
-最近一次更新（**v2.13.1**）：停止学习后取消待执行点击和交卷确认；模型返回未知选项时整题判为无效；完善设置卡片的键盘操作、小窗口适配和深色样式。
+最近一次更新（**v2.13.2**）：修复分章节目录把章节容器当成小节、把展开状态当成当前小节的问题，恢复小节计数和完成后的自动切换。
 
 | 版本 | 主要变化 |
 | --- | --- |
+| **v2.13.2** | 修复分章节课程的小节识别、计数与自动切换 |
 | **v2.13.1** | 修复停止后的残留操作、无效选项校验及设置卡片的焦点和窗口适配 |
 | **v2.13.0** | 新增思考强度、可配置退避重试、API Key 显隐和上游错误展示 |
 | **v2.12.3** | 持续等待延迟出现的交卷确认弹窗，修复提交后误报未识别测验结果 |

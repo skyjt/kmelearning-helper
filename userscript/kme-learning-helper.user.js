@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         KME 学习助手
 // @namespace    https://github.com/skyjt/kmelearning-helper
-// @version      2.13.1
+// @version      2.13.2
 // @description  自动学习 KME 课程，并通过用户配置的大模型完成可见测验和后续课程。
 // @author       skyjt
 // @license      MIT
@@ -1626,8 +1626,8 @@
       "[aria-current='page']"
     ];
     for (const selector of selectors) {
-      const el = document.querySelector(selector);
-      if (visible(el) && meaningfulRowText(textOf(el))) return el;
+      const el = contentItems().find((item) => item.matches(selector) || item.querySelector(selector));
+      if (el) return el;
     }
     return null;
   });
@@ -1645,6 +1645,8 @@
     for (const root of roots) {
       const candidates = [...root.querySelectorAll("button, a, [role='button'], [class*='cursor-pointer'], [class*='item'], [class*='chapter'], [class*='lesson']")]
         .filter(visible)
+        // Expanded chapter headers and their containers are not playable lesson rows.
+        .filter((el) => !el.matches("[aria-expanded]") && !el.querySelector("[aria-expanded]"))
         .filter((el) => {
           const text = textOf(el);
           if (!meaningfulRowText(text)) return false;
